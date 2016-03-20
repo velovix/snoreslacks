@@ -1,4 +1,4 @@
-package snoreslacks
+package app
 
 import (
 	"encoding/json"
