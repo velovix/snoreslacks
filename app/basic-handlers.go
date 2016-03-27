@@ -5,11 +5,10 @@ import (
 	"net/http"
 
 	"golang.org/x/net/context"
-	"google.golang.org/appengine/log"
 )
 
 // viewPartyHandler manages requests to print the trainer's full party.
-func viewPartyHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, currTrainer trainer) {
+func viewPartyHandler(ctx context.Context, db dao, log logger, client *http.Client, r slackRequest, currTrainer trainer) {
 	viewPartyTemplateInfo := make([]viewSinglePokemonTemplateInfo, len(currTrainer.pkmn))
 
 	for _, val := range currTrainer.pkmn {
@@ -32,10 +31,10 @@ func viewPartyHandler(w http.ResponseWriter, r *http.Request, ctx context.Contex
 	templData := &bytes.Buffer{}
 	err := viewPartyTemplate.Execute(templData, viewPartyTemplateInfo)
 	if err != nil {
-		http.Error(w, "could not populate view party template", 500)
-		log.Errorf(ctx, "while populating view party template: %s", err)
+		regularSlackRequest(client, currTrainer.LastContactURL, "could not populate view party template")
+		log.errorf(ctx, "while populating view party template: %s", err)
 		return
 	}
 
-	regularSlackResponse(w, r, string(templData.Bytes()))
+	regularSlackRequest(client, currTrainer.LastContactURL, string(templData.Bytes()))
 }

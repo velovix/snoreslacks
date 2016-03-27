@@ -33,6 +33,14 @@ type pokemon struct {
 	Move2 int
 	Move3 int
 	Move4 int
+
+	Slot int
+
+	// Pokemon will probably be stored anonymously, whatever that may meen for the
+	// database implementation. A unique identifier should be stored here when the
+	// Pokemon is loaded so changes to the Pokemon can be saved over the old
+	// instance.
+	UID string `datastore:"-"`
 }
 
 // newPokemon creates a new Pokemon from the given PokeAPI Pokemon data.

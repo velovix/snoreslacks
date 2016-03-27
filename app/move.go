@@ -41,6 +41,7 @@ const (
 )
 
 type move struct {
+	ID              int
 	Name            string
 	Accuracy        int
 	EffectChance    int
@@ -70,6 +71,7 @@ type move struct {
 func newMove(apiMove pokeapi.Move) (move, error) {
 	var m move
 
+	m.ID = apiMove.ID
 	m.Name = apiMove.Name
 	m.Accuracy = apiMove.Accuracy
 	m.EffectChance = apiMove.EffectChance
