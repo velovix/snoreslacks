@@ -1,4 +1,4 @@
-package app
+package handlers
 
 import (
 	"bytes"
@@ -31,7 +31,7 @@ func newSlackRequest(r *http.Request) (slackRequest, error) {
 	// List of expected request parameter names
 	paramNames := []string{"token", "team_id", "team_domain", "channel_id",
 		"channel_name", "user_id", "user_name", "command", "text", "response_url"}
-	var params map[string]string
+	params := make(map[string]string)
 
 	// Check if all the expected request parameters are available
 	for _, val := range paramNames {

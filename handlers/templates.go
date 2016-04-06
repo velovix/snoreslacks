@@ -1,4 +1,4 @@
-package app
+package handlers
 
 import "html/template"
 
@@ -11,10 +11,10 @@ var initialResponseTemplate *template.Template
 // first becoming a trainer.
 var starterMessageTemplateText = `
 *Professor Oak*
-Hello there! Welcome to the world of Pokèmon! My name is Oak! People call me the Pokèmon Professor!
-This world is inhabited by creatures called Pokèmon! For some people, Pokèmon are pets. Others use them for fights. Myself... I study Pokèmon as a profession.
-{{.Username}}! Your very own Pokèmon legend is about to unfold! A world of dreams and adventures with Pokèmon awaits! Let's go!
-Let's get you a starter Pokèmon! Respond with the name of the Pokèmon you would like to have to get you started.
+Hello there! Welcome to the world of Pokémon! My name is Oak! People call me the Pokémon Professor!
+This world is inhabited by creatures called Pokémon! For some people, Pokémon are pets. Others use them for fights. Myself... I study Pokémon as a profession.
+{{.Username}}! Your very own Pokémon legend is about to unfold! A world of dreams and adventures with Pokémon awaits! Let's go!
+Let's get you a starter Pokémon! Respond with the name of the Pokémon you would like to have to get you started.
 
 {{ range .Starters }}
 	*{{ .Name }}* (No. {{ .ID }})
@@ -33,7 +33,7 @@ var starterMessageTemplate *template.Template
 // a valid starter.
 var starterPickedTemplateText = `
 *Professor Oak*
-So, you want {{ .PkmnName }}! This Pokèmon is really energetic!
+So, you want {{ .PkmnName }}! This Pokémon is really energetic!
 {{ .TrainerName }} received a {{ .PkmnName }}!
 
 (You can check out your party with the "party" keyword)
@@ -52,7 +52,7 @@ var starterInstructionsTemplate *template.Template
 // attempts to pick a starter that doesn't exist.
 var invalidStarterTemplateText = `
 *Professor Oak*
-{{ . }}?? I don't have any Pokèmon like that!
+{{ . }}?? I don't have any Pokémon like that!
 `
 var invalidStarterTemplate *template.Template
 
@@ -93,7 +93,7 @@ var waitingHelpTemplateText = `
 You are currently doing nothing in particular.
 
 *party*
-View the list of Pokemon you have in your party, including their stats and other useful information.
+View the list of Pokémon you have in your party, including their stats and other useful information.
 
 *battle* _username_
 Request a battle with a trainer that has the given username. The user has to be a trainer. The user can accept by using this command with your username.
@@ -106,7 +106,7 @@ var battleWaitingHelpTemplateText = `
 You are currently waiting for your opponent to accept your challenge.
 
 *party*
-View the list of Pokemon you have in your party, including their stats and other useful information.
+View the list of Pokémon you have in your party, including their stats and other useful information.
 
 *forfeit*
 Stops waiting for your opponent to accept your challenge. It does not count as a loss so long as you're still waiting.
@@ -117,13 +117,13 @@ var battlingHelpTemplateText = `
 You are currently in a battle.
 
 *party*
-View the list of Pokemon you have in your party, including their stats and other useful information.
+View the list of Pokémon you have in your party, including their stats and other useful information.
 
 *use* _id_
 Uses the move with the given ID. These IDs are scrambled every turn so that the opponent doesn't know what move you've chosen.
 
 *switch* _slot_
-Switch to the Pokemon in the given slot, starting at 1.
+Switch to the Pokémon in the given slot, starting at 1.
 
 *forfeit*
 Leave the battle. This counts as a loss for you.
@@ -182,6 +182,24 @@ You will be switching to {{ . }} next turn.
 `
 var switchConfirmationTemplate *template.Template
 
+var actionOptionsTemplateText = `
+To select an action, use the "move" or "switch" command along with the ID of your choice. The IDs are scrambled so your opponent can't know what move you'll use.
+*Current Pokémon*: {{ .CurrPokemonName }}
+	*Moves*
+{{ printf "\u0060\u0060\u0060" }}
+{{ range .MoveTable.Moves }}
+{{ .ID }}: {{ printf "%12d" .MoveName }}
+{{ end }}
+{{ printf "\u0060\u0060\u0060" }}
+	*Party*
+{{ printf "\u0060\u0060\u0060" }}
+{{ range .PartyTable.Members }}
+{{ .ID }}: {{ printf "%12d" .PkmnName }}
+{{ end }}
+{{ printf "\u0060\u0060\u0060" }}
+`
+var actionOptionsTemplate *template.Template
+
 // Parse all templates.
 func init() {
 	initialResponseTemplate = template.Must(template.New("").Parse(initialResponseTemplateText))
@@ -200,4 +218,5 @@ func init() {
 	battlingHelpTemplate = template.Must(template.New("").Parse(battlingHelpTemplateText))
 	moveConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
 	switchConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
+	actionOptionsTemplate = template.Must(template.New("").Parse(actionOptionsTemplateText))
 }

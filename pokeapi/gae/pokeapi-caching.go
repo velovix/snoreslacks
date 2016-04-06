@@ -1,4 +1,4 @@
-package app
+package gaepokeapi
 
 import (
 	"bytes"
@@ -27,11 +27,13 @@ func idFromURL(url string) (int, error) {
 	return id, nil
 }
 
-// fetchMove wraps around the FetchMove method provided by the PokeAPI
+type GAEFetcher struct{}
+
+// FetchMove wraps around the FetchMove method provided by the PokeAPI
 // package and provides in-memory caching. If the move is not cached, it
 // will ask PokeAPI to request the data. If either that request or the cache
 // operation fails, an error is returned.
-func fetchMove(id int, client *http.Client, ctx context.Context) (pokeapi.Move, error) {
+func (f GAEFetcher) FetchMove(ctx context.Context, client *http.Client, id int) (pokeapi.Move, error) {
 	cacheKey := "pokeapi.move." + strconv.Itoa(id)
 
 	// Try the cache for the move
@@ -75,11 +77,11 @@ func fetchMove(id int, client *http.Client, ctx context.Context) (pokeapi.Move, 
 
 }
 
-// fetchPokemon wraps around the FetchPokemon method provided by the PokeAPI
+// FetchPokemon wraps around the FetchPokemon method provided by the PokeAPI
 // package and provides in-memory caching. If the Pokemon is not cached, it
 // will ask PokeAPI to request the data. If either that request or the cache
 // operation fails, an error is returned.
-func fetchPokemon(id int, client *http.Client, ctx context.Context) (pokeapi.Pokemon, error) {
+func (f GAEFetcher) FetchPokemon(ctx context.Context, client *http.Client, id int) (pokeapi.Pokemon, error) {
 	cacheKey := "pokeapi.pokemon." + strconv.Itoa(id)
 
 	// Try the cache for the Pokemon
@@ -120,4 +122,8 @@ func fetchPokemon(id int, client *http.Client, ctx context.Context) (pokeapi.Pok
 	dec := gob.NewDecoder(buf)
 	dec.Decode(&pkmn)
 	return pkmn, nil
+}
+
+func init() {
+	pokeapi.Register("gae", GAEFetcher{})
 }

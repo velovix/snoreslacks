@@ -1,4 +1,4 @@
-package app
+package gaeapp
 
 import (
 	"io/ioutil"
@@ -7,7 +7,7 @@ import (
 )
 
 var config struct {
-	Token string
+	token string
 }
 
 // Load the configuration information from the config file.
