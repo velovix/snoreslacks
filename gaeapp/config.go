@@ -7,11 +7,11 @@ import (
 )
 
 var config struct {
-	token string
+	Token string
 }
 
-// Load the configuration information from the config file.
-func init() {
+// loadConfig loads the configuration information from the config file.
+func loadConfig() {
 	data, err := ioutil.ReadFile("./snoreslacks.yaml")
 	if err != nil {
 		panic("while loading config file: " + err.Error())

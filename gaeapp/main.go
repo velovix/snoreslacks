@@ -17,6 +17,8 @@ import (
 )
 
 func init() {
+	loadConfig()
+
 	// Inject all Google App Engine dependencies
 	db, err := database.Get("gae")
 	if err != nil {
@@ -34,6 +36,6 @@ func init() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := appengine.NewContext(r)
 		client := urlfetch.Client(ctx)
-		handlers.MainHandler(ctx, w, r, db, log, client, fetcher, config.token)
+		handlers.MainHandler(ctx, w, r, db, log, client, fetcher, config.Token)
 	})
 }
