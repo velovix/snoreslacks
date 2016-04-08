@@ -15,5 +15,5 @@ const (
 func idFromURL(url string) (int, error) {
 	splitData := strings.Split(url, "/")
 
-	return strconv.Atoi(splitData[len(splitData)-1])
+	return strconv.Atoi(splitData[len(splitData)-2])
 }

@@ -14,10 +14,10 @@ type GAEMoveLookupTable struct {
 // NewMoveLookupTable creates a database move lookup table that is ready
 // to be saved from the given pkmn.MoveLookupTable.
 func (db GAEDatabase) NewMoveLookupTable(mlt pkmn.MoveLookupTable) database.MoveLookupTable {
-	return GAEMoveLookupTable{MoveLookupTable: mlt}
+	return &GAEMoveLookupTable{MoveLookupTable: mlt}
 }
 
-func (mlt GAEMoveLookupTable) GetMoveLookupTable() *pkmn.MoveLookupTable {
+func (mlt *GAEMoveLookupTable) GetMoveLookupTable() *pkmn.MoveLookupTable {
 	return &mlt.MoveLookupTable
 }
 
@@ -28,20 +28,20 @@ type GAEPartyMemberLookupTable struct {
 // NewPartyMemberLookupTable creates a database party member lookup table
 // that is ready to be saved from the given pkmn.PartyMemberLookupTable.
 func (db GAEDatabase) NewPartyMemberLookupTable(pmlt pkmn.PartyMemberLookupTable) database.PartyMemberLookupTable {
-	return GAEPartyMemberLookupTable{PartyMemberLookupTable: pmlt}
+	return &GAEPartyMemberLookupTable{PartyMemberLookupTable: pmlt}
 }
 
-func (pmlt GAEPartyMemberLookupTable) GetPartyMemberLookupTable() *pkmn.PartyMemberLookupTable {
+func (pmlt *GAEPartyMemberLookupTable) GetPartyMemberLookupTable() *pkmn.PartyMemberLookupTable {
 	return &pmlt.PartyMemberLookupTable
 }
 
 // SaveMoveLookupTable saves the lookup table to the Datastore.
 func (db GAEDatabase) SaveMoveLookupTable(ctx context.Context, dbmlt database.MoveLookupTable, dbb database.Battle) error {
-	b, ok := dbb.(GAEBattle)
+	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
-	mlt, ok := dbmlt.(GAEMoveLookupTable)
+	mlt, ok := dbmlt.(*GAEMoveLookupTable)
 	if !ok {
 		panic("The given move lookup table is not of the right type for this implementation. Are you using two implementations by misake?")
 	}
@@ -49,7 +49,7 @@ func (db GAEDatabase) SaveMoveLookupTable(ctx context.Context, dbmlt database.Mo
 	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
 	mltKey := datastore.NewIncompleteKey(ctx, "move lookup table", battleKey)
 
-	_, err := datastore.Put(ctx, mltKey, &mlt)
+	_, err := datastore.Put(ctx, mltKey, mlt)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (db GAEDatabase) SaveMoveLookupTable(ctx context.Context, dbmlt database.Mo
 }
 
 func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Battle) ([]database.MoveLookupTable, bool, error) {
-	b, ok := dbb.(GAEBattle)
+	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
@@ -81,11 +81,11 @@ func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Bat
 }
 
 func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt database.PartyMemberLookupTable, dbb database.Battle) error {
-	b, ok := dbb.(GAEBattle)
+	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
-	pmlt, ok := dbpmlt.(GAEPartyMemberLookupTable)
+	pmlt, ok := dbpmlt.(*GAEPartyMemberLookupTable)
 	if !ok {
 		panic("The given party member lookup table is not of the right type for this implementation. Are you using two implementations by misake?")
 	}
@@ -93,7 +93,7 @@ func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt dat
 	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
 	pmltKey := datastore.NewIncompleteKey(ctx, "party member lookup table", battleKey)
 
-	_, err := datastore.Put(ctx, pmltKey, &pmlt)
+	_, err := datastore.Put(ctx, pmltKey, pmlt)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt dat
 }
 
 func (db GAEDatabase) LoadPartyMemberLookupTables(ctx context.Context, dbb database.Battle) ([]database.PartyMemberLookupTable, bool, error) {
-	b, ok := dbb.(GAEBattle)
+	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}

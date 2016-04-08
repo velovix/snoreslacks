@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/satori/go.uuid"
 	"github.com/velovix/snoreslacks/pkmn"
 
 	"golang.org/x/net/context"
@@ -100,6 +101,9 @@ func MakePokemonFromBytes(data []byte) (Pokemon, error) {
 func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPkmn Pokemon) (pkmn.Pokemon, error) {
 	var p pkmn.Pokemon
 
+	uuid := uuid.NewV4()
+	p.UUID = uuid.String()
+
 	p.ID = apiPkmn.ID
 	p.Name = apiPkmn.Name
 	p.Height = apiPkmn.Height
@@ -142,7 +146,7 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 				// Get the move ID from the mvoe information
 				moveID, err := idFromURL(val.Move.URL)
 				if err != nil {
-					return pkmn.Pokemon{}, err
+					return pkmn.Pokemon{}, errors.New("while parsing an ID from a URL: " + err.Error())
 				}
 				// Learn the move
 				moveIDs[currMoveSlot] = moveID

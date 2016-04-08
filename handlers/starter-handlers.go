@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -24,12 +25,12 @@ func fetchStarters(ctx context.Context, client *http.Client, fetcher pokeapi.Fet
 		// Fetch the PokeAPI data
 		apiPkmn, err := fetcher.FetchPokemon(ctx, client, val)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("while fetching data: " + err.Error())
 		}
 		// Create the Pokemon from that data
 		pkmn[i], err = pokeapi.NewPokemon(ctx, client, fetcher, apiPkmn)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("while creating the Pokemon: " + err.Error())
 		}
 	}
 
@@ -44,11 +45,13 @@ func newTrainerHandler(ctx context.Context, db database.Database, log logging.Lo
 	currTrainer.GetTrainer().Name = r.username
 	currTrainer.GetTrainer().Mode = pkmn.StarterTrainerMode // The trainer needs to choose its starter
 
+	log.Infof(ctx, "%+v", *currTrainer.GetTrainer())
+
 	// Fetch information on the starters
 	starters, err := fetchStarters(ctx, client, fetcher)
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch information on starters")
-		log.Warningf(ctx, "while fetching starters: %s", err)
+		log.Errorf(ctx, "while fetching starters: %s", err)
 		return
 	}
 
@@ -74,7 +77,7 @@ func newTrainerHandler(ctx context.Context, db database.Database, log logging.Lo
 		log.Errorf(ctx, "while sending a Slack request: %s", err)
 	} else {
 		// Save the trainer to the database if the Slack request was successful
-		err = db.SaveTrainer(ctx, currTrainer)
+		err = db.SaveTrainer(ctx, currTrainer.Trainer)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")
 			log.Errorf(ctx, "while saving a new trainer: %s", err)
@@ -92,7 +95,7 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 	starters, err := fetchStarters(ctx, client, fetcher)
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch information on starters")
-		log.Warningf(ctx, "while fetching starters: %s", err)
+		log.Errorf(ctx, "while fetching starters: %s", err)
 		return
 	}
 
@@ -100,7 +103,16 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 	for _, val := range starters {
 		if strings.ToUpper(val.Name) == strings.ToUpper(r.text) {
 			// Give the trainer the starter
-			givePokemon(currTrainer.pkmn, db.NewPokemon(val))
+			var success bool
+			currTrainer.pkmn, success = givePokemon(currTrainer.pkmn, db.NewPokemon(val))
+			if !success {
+				// This contingency should never happen and is a sign of
+				// something seriously wrong
+				regularSlackRequest(client, currTrainer.lastContactURL,
+					"starting trainer already has the maximum amount of Pokemon")
+				log.Errorf(ctx, "%s", errors.New("a new trainer already has a full party of Pokemon"))
+				return
+			}
 			currTrainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
 			validStarter = true
 			break
@@ -155,7 +167,7 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 	}
 
 	// Save the trainer
-	err = db.SaveTrainer(ctx, currTrainer)
+	err = db.SaveTrainer(ctx, currTrainer.Trainer)
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")
 		log.Errorf(ctx, "while saving trainer information: %s", err)
@@ -167,11 +179,16 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 		log.Errorf(ctx, "while sending a Slack request: %s", err)
 	} else {
 		// Save the trainer if Slack received the request
-		err = db.SaveTrainer(ctx, currTrainer)
+		err = db.SaveTrainer(ctx, currTrainer.Trainer)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")
 			log.Errorf(ctx, "while saving trainer information: %s", err)
 			return
+		}
+		err = db.SaveParty(ctx, currTrainer.Trainer, currTrainer.pkmn)
+		if err != nil {
+			regularSlackRequest(client, currTrainer.lastContactURL, "could not save party information")
+			log.Errorf(ctx, "%s", err)
 		}
 	}
 

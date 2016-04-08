@@ -14,20 +14,20 @@ type GAEPokemon struct {
 // NewPokemon creates a database Pokemon that is ready to be saved from the
 // given pkmn.Pokemon.
 func (db GAEDatabase) NewPokemon(p pkmn.Pokemon) database.Pokemon {
-	return GAEPokemon{Pokemon: p}
+	return &GAEPokemon{Pokemon: p}
 }
 
-func (pkmn GAEPokemon) GetPokemon() *pkmn.Pokemon {
+func (pkmn *GAEPokemon) GetPokemon() *pkmn.Pokemon {
 	return &pkmn.Pokemon
 }
 
 // SavePokemon saves the given Pokemon as owned by the given trainer.
 func (db GAEDatabase) SavePokemon(ctx context.Context, dbt database.Trainer, dbpkmn database.Pokemon) error {
-	t, ok := dbt.(GAETrainer)
+	t, ok := dbt.(*GAETrainer)
 	if !ok {
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
-	pkmn, ok := dbpkmn.(GAEPokemon)
+	pkmn, ok := dbpkmn.(*GAEPokemon)
 	if !ok {
 		panic("The given Pokemon is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
@@ -35,7 +35,7 @@ func (db GAEDatabase) SavePokemon(ctx context.Context, dbt database.Trainer, dbp
 	trainerKey := datastore.NewKey(ctx, "trainer", t.Name, 0, nil)
 	pkmnKey := datastore.NewKey(ctx, "pokemon", pkmn.UUID, 0, trainerKey)
 
-	_, err := datastore.Put(ctx, pkmnKey, &pkmn)
+	_, err := datastore.Put(ctx, pkmnKey, pkmn)
 	if err != nil {
 		return err
 	}
@@ -46,17 +46,17 @@ func (db GAEDatabase) SavePokemon(ctx context.Context, dbt database.Trainer, dbp
 // LoadPokemon loads a Pokemon with the given UUID. The second return value
 // is true if the Pokemon exists, false otherwise.
 func (db GAEDatabase) LoadPokemon(ctx context.Context, uuid string) (database.Pokemon, bool, error) {
-	var pkmns []GAEPokemon
+	var pkmns []*GAEPokemon
 
 	_, err := datastore.NewQuery("pokemon").
 		Filter("UUID =", uuid).
 		GetAll(ctx, &pkmns)
 	if err != nil {
-		return GAEPokemon{}, false, err
+		return &GAEPokemon{}, false, err
 	}
 
 	if len(pkmns) == 0 {
-		return GAEPokemon{}, false, nil
+		return &GAEPokemon{}, false, nil
 	}
 
 	return pkmns[0], true, nil
@@ -64,14 +64,14 @@ func (db GAEDatabase) LoadPokemon(ctx context.Context, uuid string) (database.Po
 
 // SaveParty saves a batch of Pokemon as owend by the given trainer.
 func (db GAEDatabase) SaveParty(ctx context.Context, dbt database.Trainer, party []database.Pokemon) error {
-	t, ok := dbt.(GAETrainer)
+	t, ok := dbt.(*GAETrainer)
 	if !ok {
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		for _, dbpkmn := range party {
-			pkmn, ok := dbpkmn.(GAEPokemon)
+			pkmn, ok := dbpkmn.(*GAEPokemon)
 			if !ok {
 				panic("One of the given Pokemon is not of the right type for this implementation. Are you using two implementations by mistake?")
 			}
@@ -89,14 +89,14 @@ func (db GAEDatabase) SaveParty(ctx context.Context, dbt database.Trainer, party
 // LoadParty returns all the Pokemon in the given trainer's party. The
 // second return value is true if any Pokemon were found, false otherwise.
 func (db GAEDatabase) LoadParty(ctx context.Context, dbt database.Trainer) ([]database.Pokemon, bool, error) {
-	t, ok := dbt.(GAETrainer)
+	t, ok := dbt.(*GAETrainer)
 	if !ok {
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
 	trainerKey := datastore.NewKey(ctx, "trainer", t.Name, 0, nil)
 
-	var gaeParty []GAEPokemon
+	var gaeParty []*GAEPokemon
 	_, err := datastore.NewQuery("pokemon").
 		Ancestor(trainerKey).
 		GetAll(ctx, &gaeParty)

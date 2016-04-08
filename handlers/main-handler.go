@@ -42,17 +42,28 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		log.Errorf(ctx, "while pulling trainer information: %s", err)
 		return
 	}
+
+	log.Infof(ctx, "%s", currTrainer.Trainer.GetTrainer())
+
+	// Set the last known contact URL to the one from this request
+	currTrainer.lastContactURL = slackReq.responseURL
+
 	if !found {
 		// If the trainer doesn't exist, send the request off to the new trainer handler
 
 		log.Infof(ctx, "'%s' is a new trainer", slackReq.username)
 		newTrainerHandler(ctx, db, log, client, slackReq, fetcher, currTrainer)
 		return
+
+		// A careful mind might notice that the last contact URL doesn't get
+		// saved to the database if the trainer is a new trainer. This is
+		// because we don't have a trainer to associate the URL with yet and
+		// we never have to send more than one request to a brand new trainer
+		// so not having the data isn't an issue.
 	}
 
-	// Set the last known contact URL to the one from this request
-	currTrainer.lastContactURL = slackReq.responseURL
-	err = db.SaveLastContactURL(ctx, currTrainer, currTrainer.lastContactURL)
+	// Save the last contact URL for future use
+	err = db.SaveLastContactURL(ctx, currTrainer.Trainer, currTrainer.lastContactURL)
 	if err != nil {
 		// Some error has occurred saving the last contact URL. This should not happen
 		http.Error(w, "could not save the last contact URL for trainer '"+slackReq.username+"'", 500)
