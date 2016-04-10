@@ -64,8 +64,6 @@ func (db GAEDatabase) SaveLastContactURL(ctx context.Context, dbt database.Train
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	log.Printf("Okay, here it goes! We're about to save trainer with name %s at url %s\n", t.Name, url)
-
 	urlKey := datastore.NewKey(ctx, "last contact url", t.Name, 0, nil)
 
 	urlContainer := struct {

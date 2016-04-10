@@ -70,10 +70,10 @@ func (db GAEDatabase) LoadBattle(ctx context.Context, p1Name, p2Name string) (da
 }
 
 func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (database.Battle, bool, error) {
-	var battles []*GAEBattle
+	var battles []GAEBattle
 
 	// See if there's a Battle where the player is P1
-	_, err := datastore.NewQuery("Battle").
+	_, err := datastore.NewQuery("battle").
 		Filter("P1 =", pName).
 		GetAll(ctx, &battles)
 	if err != nil {
@@ -81,14 +81,14 @@ func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (
 	}
 	if len(battles) == 1 {
 		// The battle is found
-		return battles[0], true, nil
+		return &battles[0], true, nil
 	} else if len(battles) > 1 {
-		// The player is in more than one Battle at once. This should not happen
-		return &GAEBattle{}, false, errors.New(pName + " appears to be in more than one Battle at once")
+		// The player is in more than one battle at once. This should not happen
+		return &GAEBattle{}, false, errors.New(pName + " appears to be in more than one battle at once")
 	}
 
 	// See if there's a Battle where the player is P2
-	_, err = datastore.NewQuery("Battle").
+	_, err = datastore.NewQuery("battle").
 		Filter("P2 =", pName).
 		GetAll(ctx, &battles)
 	if err != nil {
@@ -96,10 +96,10 @@ func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (
 	}
 	if len(battles) == 1 {
 		// The battle is found
-		return battles[0], true, nil
+		return &battles[0], true, nil
 	} else if len(battles) > 1 {
-		// The player is in more than one Battle at once. This should not happen
-		return &GAEBattle{}, false, errors.New(pName + " appears to be in more than one Battle at once")
+		// The player is in more than one battle at once. This should not happen
+		return &GAEBattle{}, false, errors.New(pName + " appears to be in more than one battle at once")
 	}
 
 	// No battle of this type exists
@@ -108,6 +108,6 @@ func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (
 
 // DeleteBattle deletes the battle from the Datastore
 func (db GAEDatabase) DeleteBattle(ctx context.Context, p1Name, p2Name string) error {
-	battleKey := datastore.NewKey(ctx, "Battle", p1Name+"+"+p2Name, 0, nil)
+	battleKey := datastore.NewKey(ctx, "battle", p1Name+"+"+p2Name, 0, nil)
 	return datastore.Delete(ctx, battleKey)
 }

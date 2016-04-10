@@ -93,6 +93,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		case "":
 			// The user doesn't know what to do
 
+			log.Infof(ctx, "'%s' is looking for a list of commands", slackReq.username)
 			waitingHelpHandler(ctx, db, log, client, slackReq, currTrainer)
 		case "PARTY":
 			// The user wants to see their party
@@ -117,7 +118,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		}
 		if !exists {
 			http.Error(w, "trainer is in battling mode, but is not in a battle", 500)
-			log.Errorf(ctx, "while trying to find what battle the trainer is in: %s", err)
+			log.Errorf(ctx, "trainer is in battling mode, but is not in a battle")
 			return
 		}
 
@@ -128,6 +129,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 			case "":
 				// The user doesn't know what to do
 
+				log.Infof(ctx, "'%s' is looking for a list of commands while in waiting battle mode", slackReq.username)
 				battleWaitingHelpHandler(ctx, db, log, client, slackReq, currTrainer)
 			case "PARTY":
 				// The user wants to see their party
@@ -146,6 +148,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 			case "":
 				// The user doesn't know what to do
 
+				log.Infof(ctx, "'%s' is looking for a list of commands while in started battle mode", slackReq.username)
 				battlingHelpHandler(ctx, db, log, client, slackReq, currTrainer)
 			case "PARTY":
 				// The user wants to see their party

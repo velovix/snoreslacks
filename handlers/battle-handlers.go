@@ -60,6 +60,8 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 	if found {
 		// We will join an existing battle
 
+		log.Infof(ctx, "joining an existing battle: %+v", b)
+
 		// Load the player battle info
 		p1BattleInfo, found, err = db.LoadTrainerBattleInfo(ctx, b, b.GetBattle().P1)
 		if err != nil {
@@ -103,6 +105,8 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		p1BattleInfo = db.NewTrainerBattleInfo(pkmn.TrainerBattleInfo{Name: currTrainer.GetTrainer().Name})
 		p2BattleInfo = db.NewTrainerBattleInfo(pkmn.TrainerBattleInfo{Name: opponentName})
 
+		log.Infof(ctx, "creating a new battle: %+v", b)
+
 		// Notify everyone that the trainer is waiting for a battle
 		err := waitingForBattleTemplate.Execute(templData, b)
 		if err != nil {
@@ -140,7 +144,7 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		if err != nil {
 			log.Errorf(ctx, "%s", err)
 		}
-		err = db.SaveTrainer(ctx, currTrainer)
+		err = db.SaveTrainer(ctx, currTrainer.Trainer)
 		if err != nil {
 			log.Errorf(ctx, "%s", err)
 			return
