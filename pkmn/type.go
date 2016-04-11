@@ -18,6 +18,24 @@ var Normal, Fighting, Flying, Poison, Ground, Rock, Bug,
 	Ghost, Steel, Fire, Water, Grass, Electricity, Psychic,
 	Ice, Dragon, Dark, Fairy Type
 
+var nameToType map[string]Type
+
+func (t Type) Mod(attackType string) float64 {
+	mod := 1.0
+	for _, val := range t.Mods {
+		if val.T.Name == attackType {
+			mod *= val.Val
+		}
+	}
+
+	return mod
+}
+
+func NameToType(name string) (Type, bool) {
+	t, ok := nameToType[name]
+	return t, ok
+}
+
 // Initialize the Values of each type.
 func init() {
 	// Fill out each type's defense modifiers
@@ -25,6 +43,7 @@ func init() {
 	Normal.Mods = []TypeMod{
 		TypeMod{T: Fighting, Val: 2.0},
 		TypeMod{T: Ghost, Val: 0.0}}
+	nameToType[Normal.Name] = Normal
 	Fighting.Name = "fighting"
 	Fighting.Mods = []TypeMod{
 		TypeMod{T: Bug, Val: 0.5},
@@ -33,6 +52,7 @@ func init() {
 		TypeMod{T: Fairy, Val: 2.0},
 		TypeMod{T: Flying, Val: 2.0},
 		TypeMod{T: Psychic, Val: 2.0}}
+	nameToType[Fighting.Name] = Fighting
 	Flying.Name = "flying"
 	Flying.Mods = []TypeMod{
 		TypeMod{T: Bug, Val: 0.5},
@@ -42,6 +62,7 @@ func init() {
 		TypeMod{T: Ice, Val: 2.0},
 		TypeMod{T: Rock, Val: 2.0},
 		TypeMod{T: Ground, Val: 0.0}}
+	nameToType[Flying.Name] = Flying
 	Poison.Name = "poison"
 	Poison.Mods = []TypeMod{
 		TypeMod{T: Fighting, Val: 0.5},
@@ -50,6 +71,7 @@ func init() {
 		TypeMod{T: Ground, Val: 2.0},
 		TypeMod{T: Bug, Val: 2.0},
 		TypeMod{T: Psychic, Val: 2.0}}
+	nameToType[Poison.Name] = Poison
 	Ground.Name = "ground"
 	Ground.Mods = []TypeMod{
 		TypeMod{T: Poison, Val: 0.5},
@@ -58,6 +80,7 @@ func init() {
 		TypeMod{T: Ice, Val: 2.0},
 		TypeMod{T: Water, Val: 2.0},
 		TypeMod{T: Electricity, Val: 0.0}}
+	nameToType[Ground.Name] = Ground
 	Rock.Name = "rock"
 	Rock.Mods = []TypeMod{
 		TypeMod{T: Fire, Val: 0.5},
@@ -69,6 +92,7 @@ func init() {
 		TypeMod{T: Ground, Val: 2.0},
 		TypeMod{T: Steel, Val: 2.0},
 		TypeMod{T: Water, Val: 2.0}}
+	nameToType[Rock.Name] = Rock
 	Bug.Name = "bug"
 	Bug.Mods = []TypeMod{
 		TypeMod{T: Fighting, Val: 0.5},
@@ -77,15 +101,27 @@ func init() {
 		TypeMod{T: Fire, Val: 2.0},
 		TypeMod{T: Flying, Val: 2.0},
 		TypeMod{T: Rock, Val: 2.0}}
+	nameToType[Bug.Name] = Bug
 	Ghost.Name = "ghost"
+	nameToType[Ghost.Name] = Ghost
 	Steel.Name = "steel"
+	nameToType[Steel.Name] = Steel
 	Fire.Name = "fire"
+	nameToType[Fire.Name] = Fire
 	Water.Name = "water"
+	nameToType[Water.Name] = Water
 	Grass.Name = "grass"
+	nameToType[Grass.Name] = Grass
 	Electricity.Name = "elecricity"
+	nameToType[Electricity.Name] = Electricity
 	Psychic.Name = "psychic"
+	nameToType[Psychic.Name] = Psychic
 	Ice.Name = "ice"
+	nameToType[Ice.Name] = Ice
 	Dragon.Name = "dragon"
+	nameToType[Dragon.Name] = Dragon
 	Dark.Name = "dark"
+	nameToType[Dark.Name] = Dark
 	Fairy.Name = "fairy"
+	nameToType[Fairy.Name] = Fairy
 }

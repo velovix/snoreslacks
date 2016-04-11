@@ -48,6 +48,9 @@ type Move struct {
 	Type struct {
 		Name string `json:"name"`
 	} `json:"type"`
+	Target struct {
+		Name string `json:"name"`
+	} `json:"target"`
 	StatChanges []struct {
 		Change int `json:"change"`
 		Stat   struct {
@@ -169,6 +172,12 @@ func NewMove(apiMove Move) (pkmn.Move, error) {
 	m.FlinchChance = apiMove.Meta.FlinchChance
 	m.StatChance = apiMove.Meta.StatChance
 	m.Type = apiMove.Type.Name
+	// Assign the target
+	if apiMove.Target.Name == "user" {
+		m.Target = pkmn.SelfMoveTarget
+	} else {
+		m.Target = pkmn.EnemyMoveTarget
+	}
 	// Assign the potential stat changes
 	m.StatChanges = make([]struct {
 		Change int

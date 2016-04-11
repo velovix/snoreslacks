@@ -135,6 +135,17 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 		}
 	}
 
+	// Assign types
+	for _, t := range apiPkmn.Types {
+		if t.Slot == 1 {
+			p.Type1 = t.Type.Name
+		} else if t.Slot == 2 {
+			p.Type2 = t.Type.Name
+		} else {
+			return pkmn.Pokemon{}, errors.New("PokeAPI returned an invalid type slot '" + strconv.Itoa(t.Slot) + "'")
+		}
+	}
+
 	p.Level = 5
 
 	// Learn any necessary moves

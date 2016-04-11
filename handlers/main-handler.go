@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"net/http"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -17,7 +19,6 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	fetcher pokeapi.Fetcher, token string) {
 
 	var err error
-	var found bool
 
 	// Create the Slack request
 	slackReq, err := newSlackRequest(r)
@@ -32,18 +33,63 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 
 	log.Infof(ctx, "got text '%s' from '%s'", slackReq.text, slackReq.username)
 
-	var currTrainer trainerData
+	done := make(chan struct{}, 1)    // Signals when we're done processing this request
+	timeout := make(chan struct{}, 1) // Signals when we've been taking a long time processing this request
+	defer func() {
+		done <- struct{}{}
+	}()
 
-	// Read in the trainer data
-	currTrainer.Trainer, found, err = db.LoadTrainer(ctx, slackReq.username)
+	// Sends a signal after five seconds indicating that it has taken a while
+	// for the server to process this request and we need to assure the trainer
+	// that the request was received.
+	go func() {
+		time.Sleep(1 * time.Second)
+		select {
+		case <-done:
+			return // Don't send the timeout if the request has finished
+		default:
+			timeout <- struct{}{}
+		}
+	}()
+
+	// Sends a message assuring the trainer that the request is being processed
+	// if the server is taking a long time to complete a task.
+	go func(r slackRequest) {
+		select {
+		case <-done:
+			return // The request has finished processing
+		case <-timeout:
+			// Time to send the message
+		}
+
+		// Send the message
+		templData := &bytes.Buffer{}
+		err = initialResponseTemplate.Execute(templData, "")
+		if err != nil {
+			regularSlackRequest(client, r.responseURL, "could not populate initial response template")
+			log.Errorf(ctx, "%s", err)
+			return
+		}
+		err = regularSlackRequest(client, r.responseURL, string(templData.Bytes()))
+		if err != nil {
+			log.Errorf(ctx, "%s", err)
+			return
+		}
+	}(slackReq)
+
+	// Notify the slow response message after we finish processing
+	// the request
+	defer func() {
+		done <- struct{}{}
+	}()
+
+	// Get information on the current trainer
+	currTrainer, found, err := buildTrainerData(ctx, db, slackReq.username)
 	if err != nil {
-		// Some error has occurred reading the trainer data. This should not happen
-		http.Error(w, "could not pull in information for trainer '"+slackReq.username+"'", 500)
-		log.Errorf(ctx, "while pulling trainer information: %s", err)
-		return
+		// Some error happened while building a trainerData. This should not happen
+		log.Errorf(ctx, "while building trainer data: %s", err)
+		regularSlackRequest(client, slackReq.responseURL, "could not build trainer data")
 	}
-
-	log.Infof(ctx, "%s", currTrainer.Trainer.GetTrainer())
 
 	// Set the last known contact URL to the one from this request
 	currTrainer.lastContactURL = slackReq.responseURL
@@ -66,16 +112,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	err = db.SaveLastContactURL(ctx, currTrainer.Trainer, currTrainer.lastContactURL)
 	if err != nil {
 		// Some error has occurred saving the last contact URL. This should not happen
-		http.Error(w, "could not save the last contact URL for trainer '"+slackReq.username+"'", 500)
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-
-	// Load the trainer's party
-	currTrainer.pkmn, _, err = db.LoadParty(ctx, currTrainer.Trainer)
-	if err != nil {
-		// Some error has occurred loading the trainer's party. This should not happen
-		http.Error(w, "could not load the party for trainer '"+slackReq.username+"'", 500)
+		regularSlackRequest(client, slackReq.responseURL, "could not save the last contact URL for trainer '"+slackReq.username+"'")
 		log.Errorf(ctx, "%s", err)
 		return
 	}
@@ -104,7 +141,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 			// The user wants to battle
 
 			log.Infof(ctx, "'%s' is looking for a battle", slackReq.username)
-			challengeHandler(ctx, db, log, client, slackReq, currTrainer)
+			challengeHandler(ctx, db, log, client, slackReq, fetcher, currTrainer)
 		}
 	case pkmn.BattlingTrainerMode:
 		// The trainer is battling or waiting to battle
@@ -112,12 +149,12 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		// Get the battle the trainer is in
 		b, exists, err := db.LoadBattleTrainerIsIn(ctx, currTrainer.GetTrainer().Name)
 		if err != nil {
-			http.Error(w, "could not load the battle the trainer is in", 500)
+			regularSlackRequest(client, slackReq.responseURL, "could not load the battle the trainer is in")
 			log.Errorf(ctx, "while trying to find what battle the trainer is in: %s", err)
 			return
 		}
 		if !exists {
-			http.Error(w, "trainer is in battling mode, but is not in a battle", 500)
+			regularSlackRequest(client, slackReq.responseURL, "trainer is in battling mode, but is not in a battle")
 			log.Errorf(ctx, "trainer is in battling mode, but is not in a battle")
 			return
 		}
@@ -140,7 +177,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 				// The user wants to stop waiting to battle
 
 				log.Infof(ctx, "'%s' wants to forfeit waiting", slackReq.username)
-				forfeitHandler(ctx, db, log, client, slackReq, currTrainer)
+				forfeitHandler(ctx, db, log, client, slackReq, fetcher, currTrainer)
 			}
 		case pkmn.StartedBattleMode:
 			// The trainer is currently battling
@@ -159,7 +196,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 				// The user wants to voluntarily lose the match
 
 				log.Infof(ctx, "'%s' wants to forfeit the match", slackReq.username)
-				forfeitHandler(ctx, db, log, client, slackReq, currTrainer)
+				forfeitHandler(ctx, db, log, client, slackReq, fetcher, currTrainer)
 			case "USE":
 				// The user wants to use a Pokemon move
 

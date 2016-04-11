@@ -31,12 +31,8 @@ type PokemonBattleInfo struct {
 	SpDefStage int
 	SpeedStage int
 
-	Burned    bool
-	Frozen    bool
-	Paralyzed bool
-	Poisoned  bool
-	Asleep    bool
-	Confused  bool
+	Ailment  Ailment
+	Confused bool
 }
 
 // TrainerBattleInfo contains information on the battling status of a single

@@ -3,7 +3,7 @@ package handlers
 import "html/template"
 
 var initialResponseTemplateText = `
-Hey trainer, your request is being processed...
+Hold tight trainer, your request is being processed...
 `
 var initialResponseTemplate *template.Template
 
@@ -18,8 +18,7 @@ Let's get you a starter Pokémon! Respond with the name of the Pokémon you woul
 
 {{ range .Starters }}
 	*{{ .Name }}* (No. {{ .ID }})
-{{ printf "\u0060\u0060\u0060" }} {{/* Three grav accents to denote a code block */}}
-Type 1: {{ .Type1 }}
+{{ printf "\u0060\u0060\u0060" }}Type 1: {{ .Type1 }}
 Type 2: {{ .Type2 }}
 Height: {{ .Height }}
 Weight: {{ .Weight }}
@@ -56,35 +55,58 @@ var invalidStarterTemplateText = `
 `
 var invalidStarterTemplate *template.Template
 
-// View party template. This template will be shown when a trainer wants to
-// view their party.
+// View party in battle template. This template will be shown when a trainer
+// wants to view their party.
+var viewPartyInBattleTemplateText = `
+*Your Party*
+
+{{ range . }}
+	*{{ .Name }}* (No. {{ .ID }})
+{{ printf "\u0060\u0060\u0060" }}IN-BATTLE STATS
+  HP     : {{ .CurrHP }} / {{ .HP }}
+  Status : {{ .StatusCondition }}
+
+BASE STATS
+  Level : {{ printf "%3d" .Level     }}    Types : {{ .Type1 }} {{ .Type2 }}
+  HP    : {{ printf "%3d" .HP        }}    Att   : {{ printf "%3d" .Attack }}
+  Def   : {{ printf "%3d" .Defense   }}    SpAtt : {{ printf "%3d" .SpAttack }}
+  SpDef : {{ printf "%3d" .SpDefense }}    Speed : {{ printf "%3d" .Speed }}
+{{ printf "\u0060\u0060\u0060" }}
+{{ end }}
+`
+var viewPartyInBattleTemplate *template.Template
+
+// View party template. This template will be shown when a trainer wants
+// to view their party.
 var viewPartyTemplateText = `
 *Your Party*
 
 {{ range . }}
 	*{{ .Name }}* (No. {{ .ID }})
-{{ printf "\u0060\u0060\u0060" }} {{/* Three grav accents to denote a code block */}}
-Level : {{ printf "%03d" .Level     }}    Types : {{ .Type1 }} {{ .Type2 }}
-HP    : {{ printf "%03d" .HP        }}    Att   : {{ printf "%03d" .Attack }}
-Def   : {{ printf "%03d" .Defense   }}    SpAtt : {{ printf "%03d" .SpAttack }}
-SpDef : {{ printf "%03d" .SpDefense }}    Speed : {{ printf "%03d" .Speed }}
+{{ printf "\u0060\u0060\u0060" }}BASE STATS
+  Level : {{ printf "%3d" .Level     }}    Types : {{ .Type1 }} {{ .Type2 }}
+  HP    : {{ printf "%3d" .HP        }}    Att   : {{ printf "%3d" .Attack }}
+  Def   : {{ printf "%3d" .Defense   }}    SpAtt : {{ printf "%3d" .SpAttack }}
+  SpDef : {{ printf "%3d" .SpDefense }}    Speed : {{ printf "%3d" .Speed }}
 {{ printf "\u0060\u0060\u0060" }}
 {{ end }}
 `
 var viewPartyTemplate *template.Template
 
 type viewSinglePokemonTemplateInfo struct {
-	Name      string
-	ID        int
-	Level     int
-	Type1     string
-	Type2     string
-	HP        int
-	Attack    int
-	Defense   int
-	SpAttack  int
-	SpDefense int
-	Speed     int
+	Name            string
+	ID              int
+	Level           int
+	Type1           string
+	Type2           string
+	HP              int
+	CurrHP          int
+	Attack          int
+	Defense         int
+	SpAttack        int
+	SpDefense       int
+	Speed           int
+	StatusCondition string
 }
 
 // Waiting help template. This template will be shown when the player is
@@ -157,7 +179,7 @@ var waitingForfeitTemplateText = `
 var waitingForfeitTemplate *template.Template
 
 var battlingForfeitTemplateText = `
-{{ .P1 }} has forfeitted the match, making {{ .P2 }} the winner by default!
+{{ .Forfeitter }} has forfeitted the match, making {{ .Opponent }} the winner by default!
 `
 var battlingForfeitTemplate *template.Template
 
@@ -182,19 +204,17 @@ You will be switching to {{ . }} next turn.
 `
 var switchConfirmationTemplate *template.Template
 
+// Action options template. Shows the battle options a trainer has.
 var actionOptionsTemplateText = `
 To select an action, use the "move" or "switch" command along with the ID of your choice. The IDs are scrambled so your opponent can't know what move you'll use.
 *Current Pokémon*: {{ .CurrPokemonName }}
-	*Moves*
 {{ printf "\u0060\u0060\u0060" }}
-{{ range .MoveTable.Moves }}
-{{ .ID }}: {{ printf "%12d" .MoveName }}
+MOVES
+{{ range .MoveTable.Moves }}  {{ .ID }}: {{ .MoveName }}
 {{ end }}
-{{ printf "\u0060\u0060\u0060" }}
-	*Party*
-{{ printf "\u0060\u0060\u0060" }}
-{{ range .PartyTable.Members }}
-{{ .ID }}: {{ printf "%12d" .PkmnName }}
+
+PARTY
+{{ range .PartyTable.Members }}  {{ .ID }}: {{ .PkmnName }}
 {{ end }}
 {{ printf "\u0060\u0060\u0060" }}
 `
@@ -208,6 +228,7 @@ func init() {
 	invalidStarterTemplate = template.Must(template.New("").Parse(invalidStarterTemplateText))
 	starterPickedTemplate = template.Must(template.New("").Parse(starterPickedTemplateText))
 	viewPartyTemplate = template.Must(template.New("").Parse(viewPartyTemplateText))
+	viewPartyInBattleTemplate = template.Must(template.New("").Parse(viewPartyInBattleTemplateText))
 	waitingHelpTemplate = template.Must(template.New("").Parse(waitingHelpTemplateText))
 	noSuchTrainerExistsTemplate = template.Must(template.New("").Parse(noSuchTrainerExistsTemplateText))
 	battleStartedTemplate = template.Must(template.New("").Parse(battleStartedTemplateText))

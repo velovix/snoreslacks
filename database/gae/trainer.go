@@ -90,7 +90,9 @@ func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Train
 
 	urlKey := datastore.NewKey(ctx, "last contact url", t.Name, 0, nil)
 
-	var url string
+	var url struct {
+		URL string
+	}
 	err := datastore.Get(ctx, urlKey, &url)
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
@@ -100,5 +102,5 @@ func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Train
 		}
 	}
 
-	return url, true, nil
+	return url.URL, true, nil
 }
