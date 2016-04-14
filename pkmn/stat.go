@@ -47,3 +47,29 @@ func CalcIBSpDef(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
 func CalcIBSpeed(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
 	return 0
 }
+
+// CalcIBAccuracy calculates the in-battle accuracy of the Pokemon in percent.
+// This value alone isn't very meaningful, but it works when plugged into the
+// move accuracy function.
+func CalcIBAccuracy(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
+	if pkmnBI.AccuracyStage > 0 {
+		return int(100.0 * ((3.0 + float64(pkmnBI.AccuracyStage)) / 3.0))
+	} else if pkmnBI.AccuracyStage < 0 {
+		return int(100.0 * (3.0 / (3.0 + float64(pkmnBI.AccuracyStage))))
+	} else {
+		return 100
+	}
+}
+
+// CalcIBEvasion calculates the in-battle evasion of the Pokemon in percent.
+// This value alone isn't very meaningful, but it works when plugged into the
+// move accuracy function.
+func CalcIBEvasion(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
+	if pkmnBI.EvasionStage > 0 {
+		return int(100.0 * (3.0 / (3.0 + float64(pkmnBI.EvasionStage))))
+	} else if pkmnBI.EvasionStage < 0 {
+		return int(100.0 * ((3.0 + float64(pkmnBI.EvasionStage)) / 3.0))
+	} else {
+		return 100
+	}
+}

@@ -1,5 +1,7 @@
 package pkmn
 
+import "strings"
+
 // TypeMod is a single type modifier. It contains a defense modifier and the
 // type that the defense modifier applies to.
 type TypeMod struct {
@@ -31,13 +33,17 @@ func (t Type) Mod(attackType string) float64 {
 	return mod
 }
 
+// NameToType returns the Type object for a given type name, case
+// insensitively, and false if the type could not be found.
 func NameToType(name string) (Type, bool) {
-	t, ok := nameToType[name]
+	t, ok := nameToType[strings.ToLower(name)]
 	return t, ok
 }
 
 // Initialize the Values of each type.
 func init() {
+	nameToType = make(map[string]Type)
+
 	// Fill out each type's defense modifiers
 	Normal.Name = "normal"
 	Normal.Mods = []TypeMod{

@@ -62,7 +62,8 @@ var viewPartyInBattleTemplateText = `
 
 {{ range . }}
 	*{{ .Name }}* (No. {{ .ID }})
-{{ printf "\u0060\u0060\u0060" }}IN-BATTLE STATS
+{{ printf "\u0060\u0060\u0060" -}}
+IN-BATTLE STATS
   HP     : {{ .CurrHP }} / {{ .HP }}
   Status : {{ .StatusCondition }}
 
@@ -83,7 +84,8 @@ var viewPartyTemplateText = `
 
 {{ range . }}
 	*{{ .Name }}* (No. {{ .ID }})
-{{ printf "\u0060\u0060\u0060" }}BASE STATS
+{{ printf "\u0060\u0060\u0060" -}}
+BASE STATS
   Level : {{ printf "%3d" .Level     }}    Types : {{ .Type1 }} {{ .Type2 }}
   HP    : {{ printf "%3d" .HP        }}    Att   : {{ printf "%3d" .Attack }}
   Def   : {{ printf "%3d" .Defense   }}    SpAtt : {{ printf "%3d" .SpAttack }}
@@ -208,7 +210,7 @@ var switchConfirmationTemplate *template.Template
 var actionOptionsTemplateText = `
 To select an action, use the "move" or "switch" command along with the ID of your choice. The IDs are scrambled so your opponent can't know what move you'll use.
 *Current Pokémon*: {{ .CurrPokemonName }}
-{{ printf "\u0060\u0060\u0060" }}
+{{ printf "\u0060\u0060\u0060" -}}
 MOVES
 {{ range .MoveTable.Moves }}  {{ .ID }}: {{ .MoveName }}
 {{ end }}
@@ -219,6 +221,97 @@ PARTY
 {{ printf "\u0060\u0060\u0060" }}
 `
 var actionOptionsTemplate *template.Template
+
+// Move report template. Contains a full textual representation of a move
+// report, telling trainers what happened when a move was used.
+var moveReportTemplateText = `
+{{ .UserName }} used {{ .MoveName }}!
+{{ if .Missed -}}
+But the attack missed!
+{{ else if .CriticalHit -}}
+Critical hit!
+{{ else -}}
+{{- end -}}
+{{ if .Effectiveness gt 0 -}}
+It's super effective!
+{{ else if .Effectiveness lt 0 -}}
+It's not very effective...
+{{ else -}}
+{{- end -}}
+{{ if .TargetDamage -}}
+{{ .TargetName }} took {{ .TargetDamage }} damage!
+{{ else -}}
+{{- end -}}
+{{ if .TargetDrain -}}
+{{ .UserName }} drained {{ .TargetDrain }} HP from {{ .TargetName }}!
+{{ else -}}
+{{- end -}}
+{{ if .UserHealing gt 0 -}}
+{{ .UserName }} healed {{ .UserHealing }} HP!
+{{ else if .UserHealing lt 0 -}}
+{{ .UserName }} suffered knockback damage...
+{{ else -}}
+{{- end -}}
+{{ if .UserFainted -}}
+{{ .UserName }} has fainted!
+{{ else -}}
+{{- end -}}
+{{ if .TargetFainted -}}
+{{ .TargetName }} has fainted!
+{{ else -}}
+{{- end -}}
+{{ if .AttStageChange gt 0 -}}
+{{ .TargetName }}'s attack has increased!
+{{ else if .AttStageChange lt 0 -}}
+{{ .TargetName }}'s attack has decreased!
+{{ else -}}
+{{- end -}}
+{{ if .DefStageChange gt 0 -}}
+{{ .TargetName }}'s defense has increased!
+{{ else if .DefStageChange lt 0 -}}
+{{ .TargetName }}'s defense has decreased!
+{{ else -}}
+{{- end -}}
+{{ if .SpAttStageChange gt 0 -}}
+{{ .TargetName }}'s special attack has increased!
+{{ else if .SpAttStageChange lt 0 -}}
+{{ .TargetName }}'s special attack has decreased!
+{{ else -}}
+{{- end -}}
+{{ if .SpDefStageChange gt 0 -}}
+{{ .TargetName }}'s special defense has increased!
+{{ else if .SpDefStageChange lt 0 -}}
+{{ .TargetName }}'s special defense has decreased!
+{{ else -}}
+{{- end -}}
+{{ if .SpeedStageChange gt 0 -}}
+{{ .TargetName }}'s speed has increased!
+{{ else if .SpeedStageChange lt 0 -}}
+{{ .TargetName }}'s speed has decreased!
+{{ else -}}
+{{- end -}}
+{{ if .Poisoned }}
+{{ .TargetName }} has been poisoned!
+{{ else -}}
+{{- end -}}
+{{ if .Paralyzed }}
+{{ .TargetName }} has been paralyzed!
+{{ else -}}
+{{- end -}}
+{{ if .Asleep }}
+{{ .TargetName }} has fallen asleep!
+{{ else -}}
+{{- end -}}
+{{ if .Frozen }}
+{{ .TargetName }} has been frozen!
+{{ else -}}
+{{- end -}}
+{{ if .Burned }}
+{{ .TargetName }} has been burned!
+{{ else -}}
+{{- end -}}
+`
+var moveReportTemplate *template.Template
 
 // Parse all templates.
 func init() {
@@ -240,4 +333,5 @@ func init() {
 	moveConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
 	switchConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
 	actionOptionsTemplate = template.Must(template.New("").Parse(actionOptionsTemplateText))
+	moveReportTemplate = template.Must(template.New("").Parse(moveReportTemplateText))
 }

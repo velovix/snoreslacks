@@ -14,6 +14,219 @@ import (
 	"golang.org/x/net/context"
 )
 
+func processTurn(ctx context.Context, db database.Database, log logging.Logger,
+	client *http.Client, r slackRequest, fetcher pokeapi.Fetcher,
+	p1, p2 trainerData, p1BI, p2BI database.TrainerBattleInfo,
+	b database.Battle) bool {
+
+	// Get the trainers' current Pokemon
+	p1Pkmn := p1.pkmn[p1BI.GetTrainerBattleInfo().CurrPkmnSlot]
+	p2Pkmn := p2.pkmn[p2BI.GetTrainerBattleInfo().CurrPkmnSlot]
+
+	// Load player 1's current Pokemon battle information
+	p1PkmnBI, found, err := db.LoadPokemonBattleInfo(ctx, b, p1Pkmn.GetPokemon().UUID)
+	if err != nil {
+		regularSlackRequest(client, p1.lastContactURL, "could not get Pokemon battle info")
+		log.Errorf(ctx, "while fetching Pokemon battle info: %s", err)
+		return false
+	}
+	if !found {
+		regularSlackRequest(client, p1.lastContactURL, "could not get Pokemon battle info")
+		err := errors.New("trainer '" + p1.GetTrainer().Name + "' current Pokemon has no battle info but is in a battle")
+		log.Errorf(ctx, "%s", err)
+		return false
+	}
+	// Load player 2's current Pokemon battle information
+	p2PkmnBI, found, err := db.LoadPokemonBattleInfo(ctx, b, p2Pkmn.GetPokemon().UUID)
+	if err != nil {
+		regularSlackRequest(client, p1.lastContactURL, "could not get Pokemon battle info")
+		log.Errorf(ctx, "while fetching Pokemon battle info: %s", err)
+		return false
+	}
+	if !found {
+		regularSlackRequest(client, p1.lastContactURL, "could not get Pokemon battle info")
+		err := errors.New("trainer '" + p2.GetTrainer().Name + "' current Pokemon has no battle info but is in a battle")
+		log.Errorf(ctx, "%s", err)
+		return false
+	}
+
+	// Create a helper function for loading moves
+	loadMove := func(id int) (pkmn.Move, error) {
+		// Load the move from PokeAPI
+		apiMove, err := fetcher.FetchMove(ctx, client, id)
+		if err != nil {
+			return pkmn.Move{}, err
+		}
+		// Use the PokeAPI data to create a pkmn.Move
+		move, err := pokeapi.NewMove(apiMove)
+		if err != nil {
+			return pkmn.Move{}, err
+		}
+		return move, nil
+	}
+
+	// Load player 1's move, if necessary
+	var p1PkmnMove, p2PkmnMove pkmn.Move
+	if p1BI.GetTrainerBattleInfo().NextBattleAction.Type == pkmn.MoveBattleActionType {
+		// Player 1 is using a move, so we need to load it
+		p1PkmnMove, err = loadMove(p1BI.GetTrainerBattleInfo().NextBattleAction.Val)
+		if err != nil {
+			regularSlackRequest(client, p1.lastContactURL, "could not load move information")
+			log.Errorf(ctx, "%s", err)
+			return false
+		}
+	}
+	if p2BI.GetTrainerBattleInfo().NextBattleAction.Type == pkmn.MoveBattleActionType {
+		// Player 2 is using a move, so we need to load it
+		p2PkmnMove, err = loadMove(p2BI.GetTrainerBattleInfo().NextBattleAction.Val)
+		if err != nil {
+			regularSlackRequest(client, p1.lastContactURL, "could not load move information")
+			log.Errorf(ctx, "%s", err)
+			return false
+		}
+	}
+
+	// Runs a move turn for a single player. The first return value is false if
+	// the next Pokemon should not be allowed to use their move (generally
+	// meaning that it fainted. The second returns false if something didn't
+	// succeed. This function does the right thing in case of errors, so the
+	// only thing callers have to do is operate under the assumption that this
+	// operation should be aborted.
+	runPlayerMove := func(t trainerData, tBI database.TrainerBattleInfo,
+		opponent trainerData,
+		userPkmn, targetPkmn database.Pokemon,
+		userPkmnBI, targetPkmnBI database.PokemonBattleInfo,
+		move pkmn.Move) (bool, bool) {
+
+		var mr pkmn.MoveReport
+
+		// Use the move
+		mr, err = pkmn.RunMove(userPkmn.GetPokemon(), targetPkmn.GetPokemon(),
+			userPkmnBI.GetPokemonBattleInfo(), targetPkmnBI.GetPokemonBattleInfo(), move)
+		if err != nil {
+			regularSlackRequest(client, t.lastContactURL, "could not run move")
+			log.Errorf(ctx, "%s", err)
+			return false, false
+		}
+
+		// Send the move report
+		templInfo := struct {
+			pkmn.MoveReport
+			UserName   string
+			TargetName string
+			MoveName   string
+		}{
+			MoveReport: mr,
+			UserName:   t.GetTrainer().Name,
+			TargetName: opponent.GetTrainer().Name,
+			MoveName:   move.Name}
+		templData := &bytes.Buffer{}
+		err = moveReportTemplate.Execute(templData, templInfo)
+		if err != nil {
+			regularSlackRequest(client, t.lastContactURL, "could not populate move report template")
+			log.Errorf(ctx, "%s", err)
+			return false, false
+		}
+		err = regularSlackRequest(client, t.lastContactURL, string(templData.Bytes()))
+		if err != nil {
+			return false, false
+		}
+
+		if mr.TargetFainted {
+			return false, true
+		}
+
+		return true, true
+	}
+
+	// Runs a switch turn for a single player. Returns false if something didn't
+	// succeed. This function does the right thing in case of errors, so the
+	// only thing callers have to do is operate under the assumption that this
+	// operation should be aborted.
+	runPlayerSwitch := func(t database.Trainer, tBI database.TrainerBattleInfo) bool {
+		// Switch Pokemon
+		tBI.GetTrainerBattleInfo().CurrPkmnSlot = tBI.GetTrainerBattleInfo().NextBattleAction.Val
+
+		return true
+	}
+
+	// Check what battle action player 1 is doing
+	switch p1BI.GetTrainerBattleInfo().NextBattleAction.Type {
+	case pkmn.SwitchBattleActionType:
+		// Check what battle action player 2 is doing
+		switch p2BI.GetTrainerBattleInfo().NextBattleAction.Type {
+		case pkmn.SwitchBattleActionType:
+			// Both players are switching, meaning that order doesn't matter
+			// and player 1 will go first by default
+
+			if !runPlayerSwitch(p1, p1BI) || !runPlayerSwitch(p2, p2BI) {
+				return false
+			}
+		case pkmn.MoveBattleActionType:
+			// Player 1 is switching and player 2 is using a move. Player 1
+			// will go first because switching always runs first.
+
+			if !runPlayerSwitch(p1, p1BI) {
+				return false
+			}
+			_, success := runPlayerMove(p2, p2BI, p1, p2Pkmn, p1Pkmn, p2PkmnBI, p1PkmnBI, p2PkmnMove)
+			if !success {
+				return false
+			}
+		}
+	case pkmn.MoveBattleActionType:
+		// Check what battle action player 2 is doing
+		switch p2BI.GetTrainerBattleInfo().NextBattleAction.Type {
+		case pkmn.SwitchBattleActionType:
+			// Player 1 is using a move and player 2 is switching. Player 2
+			// will go first because switching always runs first.
+
+			if !runPlayerSwitch(p2, p2BI) {
+				return false
+			}
+			_, success := runPlayerMove(p1, p1BI, p2, p1Pkmn, p2Pkmn, p1PkmnBI, p2PkmnBI, p1PkmnMove)
+			if !success {
+				return false
+			}
+		case pkmn.MoveBattleActionType:
+			// Player 1 and player 2 are both using moves. We have to consult
+			// the speed of the Pokemon and the priority of the moves to decide
+			// who goes first.
+
+			first := pkmn.CalcMoveOrder(*p1Pkmn.GetPokemon(), *p2Pkmn.GetPokemon(),
+				*p1PkmnBI.GetPokemonBattleInfo(), *p2PkmnBI.GetPokemonBattleInfo(), p1PkmnMove, p2PkmnMove)
+			switch first {
+			case 1:
+				// Player 1 will move first
+				runNextMove, success := runPlayerMove(p1, p1BI, p2, p1Pkmn, p2Pkmn, p1PkmnBI, p2PkmnBI, p1PkmnMove)
+				if !success {
+					return false
+				}
+				if runNextMove {
+					_, success = runPlayerMove(p2, p2BI, p1, p2Pkmn, p1Pkmn, p2PkmnBI, p1PkmnBI, p2PkmnMove)
+					if !success {
+						return false
+					}
+				}
+			case 2:
+				// Player 2 will move first
+				runNextMove, success := runPlayerMove(p2, p2BI, p1, p2Pkmn, p1Pkmn, p2PkmnBI, p1PkmnBI, p2PkmnMove)
+				if !success {
+					return false
+				}
+				if runNextMove {
+					_, success = runPlayerMove(p1, p1BI, p2, p1Pkmn, p2Pkmn, p1PkmnBI, p2PkmnBI, p1PkmnMove)
+					if !success {
+						return false
+					}
+				}
+			}
+		}
+	}
+
+	return true
+}
+
 // fisherYates creates a slice of [from, to] and shuffles it using the
 // Fisher-Yates algorithm.
 func fisherYates(from, to int) []int {
@@ -31,6 +244,7 @@ func fisherYates(from, to int) []int {
 	return values
 }
 
+// sendActionOptions sends each player their move and party switching options.
 func sendActionOptions(ctx context.Context, db database.Database, log logging.Logger,
 	client *http.Client, r slackRequest, fetcher pokeapi.Fetcher,
 	currTrainer trainerData, currTrainerBI database.TrainerBattleInfo, b database.Battle) error {

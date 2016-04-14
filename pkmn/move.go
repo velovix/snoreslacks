@@ -76,6 +76,31 @@ type Move struct {
 	}
 }
 
+type MoveReport struct {
+	Missed           bool
+	TargetsUser      bool
+	UserHealing      int
+	UserFainted      bool
+	TargetDamage     int
+	TargetDrain      int
+	TargetFainted    bool
+	AttStageChange   int
+	DefStageChange   int
+	SpAttStageChange int
+	SpDefStageChange int
+	SpeedStageChange int
+	CriticalHit      bool
+	Effectiveness    int
+	Poisoned         bool
+	Paralyzed        bool
+	Asleep           bool
+	Frozen           bool
+	Burned           bool
+}
+
+// CalcMoveOrder calculates which move should go first based on the move
+// itself and the user of the move. The function returns 1 if Pokemon 1 goes
+// first, or 2 if Pokemon 2 goes first.
 func CalcMoveOrder(pkmn1, pkmn2 Pokemon, pkmnBI1, pkmnBI2 PokemonBattleInfo, move1, move2 Move) int {
 	// Check if the moves have different priority and find move order based
 	// on that if possible. Moves with a higher priority go before moves
@@ -99,6 +124,8 @@ func CalcMoveOrder(pkmn1, pkmn2 Pokemon, pkmnBI1, pkmnBI2 PokemonBattleInfo, mov
 	return rand.Intn(1) + 1
 }
 
+// critChance returns the critical hit chance in percentage based on the given
+// crit rate.
 func critChance(critRate int) float64 {
 	if critRate == 0 {
 		return 6.25
@@ -111,15 +138,19 @@ func critChance(critRate int) float64 {
 	}
 }
 
-func calcDamage(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Move) (int, error) {
+// calcDamage calculates the damage the target will take if the user uses the
+// given move. It returns the damage given, the type effectiveness (positive if
+// super effective, negative if not very effective, zero if regular), true if it
+// was a critical hit, and potentially an error.
+func calcDamage(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Move) (int, int, bool, error) {
 	// Convert target type names to type objects
 	targetType1, ok := NameToType(target.Type1)
 	if !ok {
-		return 0, errors.New("no type found for type name '" + target.Type1 + "'")
+		return 0, 0, false, errors.New("no type found for type name '" + target.Type1 + "'")
 	}
 	targetType2, ok := NameToType(target.Type2)
 	if !ok {
-		return 0, errors.New("no type found for type name '" + target.Type2 + "'")
+		return 0, 0, false, errors.New("no type found for type name '" + target.Type2 + "'")
 	}
 
 	// Calculate same type attack bonus
@@ -152,52 +183,94 @@ func calcDamage(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move
 	}
 
 	// Calculate the damage
-	return int(((((2.0*float64(user.Level)+10)/250.0)*(att/def))*float64(move.Power) + 2.0) * modifier), nil
+	return int(((((2.0*float64(user.Level)+10)/250.0)*(att/def))*float64(move.Power) + 2.0) * modifier), int(typeEff), (crit > 1.0), nil
 }
 
-func RunMove(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Move) error {
-	if rand.Intn(100)+1 > move.Accuracy {
+// RunMove uses the move on the target.
+func RunMove(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Move) (MoveReport, error) {
+	var mr MoveReport
+
+	if rand.Intn(100)+1 > move.Accuracy*(CalcIBAccuracy(*user, *userBI)/CalcIBEvasion(*target, *targetBI)) {
 		// The move missed, so we have nothing to do
-		return nil
+		mr.Missed = true
+		return mr, nil
 	}
 
+	// Check if the move targets the user
 	if move.Target == SelfMoveTarget {
 		// The target is directed at the user, so we'll change the target to
 		// the user
 		target = user
 		targetBI = userBI
+		mr.TargetsUser = true
 	}
 
+	// Check if the move heals
+	if move.Healing > 0 {
+		// The move heals the user by the given percent
+		maxHP := CalcIBHP(*user, *userBI) * move.Healing
+		userBI.CurrHP += maxHP * move.Healing
+		if userBI.CurrHP > maxHP {
+			userBI.CurrHP = maxHP
+		}
+		mr.UserHealing = maxHP * move.Healing
+	}
+
+	// Check what kind of damage class the move is in
 	if move.DamageClass == StatusDamageClass {
 		// Apply all status effects onto the target
 		for _, statChange := range move.StatChanges {
 			switch statChange.Stat {
 			case AttackStatType:
 				targetBI.AttStage += statChange.Change
+				mr.AttStageChange = statChange.Change
 			case DefenseStatType:
 				targetBI.DefStage += statChange.Change
+				mr.DefStageChange = statChange.Change
 			case SpecialAttackStatType:
 				targetBI.SpAttStage += statChange.Change
+				mr.SpAttStageChange = statChange.Change
 			case SpecialDefenseStatType:
 				targetBI.SpDefStage += statChange.Change
+				mr.SpDefStageChange = statChange.Change
 			case SpeedStatType:
 				targetBI.SpeedStage += statChange.Change
+				mr.SpeedStageChange = statChange.Change
 			}
 		}
 	} else {
 		// Calculate the damage done by the move
-		damage, err := calcDamage(user, target, userBI, targetBI, move)
+		damage, effectiveness, crit, err := calcDamage(user, target, userBI, targetBI, move)
 		if err != nil {
-			return err
+			return MoveReport{}, err
 		}
 
 		// Deal the damage
 		targetBI.CurrHP -= damage
 		if targetBI.CurrHP < 0 {
 			targetBI.CurrHP = 0
+			mr.TargetFainted = true // The move made the opponent faint
+		}
+		mr.TargetDamage = damage
+		mr.Effectiveness = effectiveness
+		mr.CriticalHit = crit
+
+		// Check if the move has HP drain or knockback
+		if move.Drain > 0 {
+			// The move heals or hurts the user by a percent of the damage done
+			userBI.CurrHP += damage * move.Drain
+			maxHP := CalcIBHP(*user, *userBI) * move.Healing
+			if userBI.CurrHP > maxHP {
+				userBI.CurrHP = maxHP
+			} else if userBI.CurrHP < 0 {
+				userBI.CurrHP = 0
+				mr.UserFainted = true // Knockback made the user faint
+			}
+			mr.TargetDrain = damage * move.Drain
 		}
 	}
 
+	// Check if the move has an ailment effect
 	if move.Ailment != NoAilment {
 		// Attempt to inflict an ailment on the target
 
@@ -207,9 +280,21 @@ func RunMove(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Mo
 			// suffering from an ailment
 			if targetBI.Ailment == NoAilment {
 				targetBI.Ailment = move.Ailment
+				switch targetBI.Ailment {
+				case PoisonAilment:
+					mr.Poisoned = true
+				case ParalysisAilment:
+					mr.Paralyzed = true
+				case SleepAilment:
+					mr.Asleep = true
+				case FreezeAilment:
+					mr.Frozen = true
+				case BurnAilment:
+					mr.Burned = true
+				}
 			}
 		}
 	}
 
-	return nil
+	return mr, nil
 }

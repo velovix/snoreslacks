@@ -24,12 +24,14 @@ type BattleAction struct {
 type PokemonBattleInfo struct {
 	PkmnUUID string
 
-	CurrHP     int
-	AttStage   int
-	DefStage   int
-	SpAttStage int
-	SpDefStage int
-	SpeedStage int
+	CurrHP        int
+	AttStage      int
+	DefStage      int
+	SpAttStage    int
+	SpDefStage    int
+	SpeedStage    int
+	AccuracyStage int
+	EvasionStage  int
 
 	Ailment  Ailment
 	Confused bool
