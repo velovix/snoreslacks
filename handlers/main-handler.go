@@ -33,11 +33,10 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 
 	log.Infof(ctx, "got text '%s' from '%s'", slackReq.text, slackReq.username)
 
+	startTime := time.Now()
+
 	done := make(chan struct{}, 1)    // Signals when we're done processing this request
 	timeout := make(chan struct{}, 1) // Signals when we've been taking a long time processing this request
-	defer func() {
-		done <- struct{}{}
-	}()
 
 	// Sends a signal after five seconds indicating that it has taken a while
 	// for the server to process this request and we need to assure the trainer
@@ -80,6 +79,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	// Notify the slow response message after we finish processing
 	// the request
 	defer func() {
+		log.Infof(ctx, "finished processing request for '%s' (processing took %s)", slackReq.username, time.Since(startTime))
 		done <- struct{}{}
 	}()
 
@@ -201,12 +201,12 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 				// The user wants to use a Pokemon move
 
 				log.Infof(ctx, "'%s' wants to use a move", slackReq.username)
-				useMoveHandler(ctx, db, log, client, slackReq, currTrainer)
+				useMoveHandler(ctx, db, log, client, slackReq, fetcher, currTrainer)
 			case "SWITCH":
 				// The user wants to switch Pokemon
 
 				log.Infof(ctx, "'%s' wants to switch Pokemon", slackReq.username)
-				switchPokemonHandler(ctx, db, log, client, slackReq, currTrainer)
+				switchPokemonHandler(ctx, db, log, client, slackReq, fetcher, currTrainer)
 			}
 		}
 	}

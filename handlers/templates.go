@@ -2,6 +2,11 @@ package handlers
 
 import "html/template"
 
+var invalidCommandTemplateText = `
+Invalid command format.
+`
+var invalidCommandTemplate *template.Template
+
 var initialResponseTemplateText = `
 Hold tight trainer, your request is being processed...
 `
@@ -232,10 +237,12 @@ But the attack missed!
 Critical hit!
 {{ else -}}
 {{- end -}}
-{{ if .Effectiveness gt 0 -}}
+{{ if gt .Effectiveness 1 -}}
 It's super effective!
-{{ else if .Effectiveness lt 0 -}}
+{{ else if lt .Effectiveness 1 -}}
 It's not very effective...
+{{ else if eq .Effectiveness 0 -}}
+The move had no effect...
 {{ else -}}
 {{- end -}}
 {{ if .TargetDamage -}}
@@ -246,9 +253,9 @@ It's not very effective...
 {{ .UserName }} drained {{ .TargetDrain }} HP from {{ .TargetName }}!
 {{ else -}}
 {{- end -}}
-{{ if .UserHealing gt 0 -}}
+{{ if gt .UserHealing 0 -}}
 {{ .UserName }} healed {{ .UserHealing }} HP!
-{{ else if .UserHealing lt 0 -}}
+{{ else if lt .UserHealing 0 -}}
 {{ .UserName }} suffered knockback damage...
 {{ else -}}
 {{- end -}}
@@ -260,33 +267,33 @@ It's not very effective...
 {{ .TargetName }} has fainted!
 {{ else -}}
 {{- end -}}
-{{ if .AttStageChange gt 0 -}}
+{{ if gt .AttStageChange 0 -}}
 {{ .TargetName }}'s attack has increased!
-{{ else if .AttStageChange lt 0 -}}
+{{ else if lt .AttStageChange 0 -}}
 {{ .TargetName }}'s attack has decreased!
 {{ else -}}
 {{- end -}}
-{{ if .DefStageChange gt 0 -}}
+{{ if gt .DefStageChange 0 -}}
 {{ .TargetName }}'s defense has increased!
-{{ else if .DefStageChange lt 0 -}}
+{{ else if lt .DefStageChange 0 -}}
 {{ .TargetName }}'s defense has decreased!
 {{ else -}}
 {{- end -}}
-{{ if .SpAttStageChange gt 0 -}}
+{{ if gt .SpAttStageChange 0 -}}
 {{ .TargetName }}'s special attack has increased!
-{{ else if .SpAttStageChange lt 0 -}}
+{{ else if lt .SpAttStageChange 0 -}}
 {{ .TargetName }}'s special attack has decreased!
 {{ else -}}
 {{- end -}}
-{{ if .SpDefStageChange gt 0 -}}
+{{ if gt .SpDefStageChange 0 -}}
 {{ .TargetName }}'s special defense has increased!
-{{ else if .SpDefStageChange lt 0 -}}
+{{ else if lt .SpDefStageChange 0 -}}
 {{ .TargetName }}'s special defense has decreased!
 {{ else -}}
 {{- end -}}
-{{ if .SpeedStageChange gt 0 -}}
+{{ if gt .SpeedStageChange 0 -}}
 {{ .TargetName }}'s speed has increased!
-{{ else if .SpeedStageChange lt 0 -}}
+{{ else if lt .SpeedStageChange 0 -}}
 {{ .TargetName }}'s speed has decreased!
 {{ else -}}
 {{- end -}}
@@ -313,8 +320,20 @@ It's not very effective...
 `
 var moveReportTemplate *template.Template
 
+var switchPokemonTemplateText = `
+{{ .Switcher }} has withdrawn {{ .WithdrawnPokemon }}.
+{{ .Switcher }} sent out {{ .SelectedPokemon }}!
+`
+var switchPokemonTemplate *template.Template
+
+var faintedPokemonUsingMoveTemplateText = `
+A fainted Pokémon cannot use a move. You must switch to a battle-ready Pokémon first.
+`
+var faintedPokemonUsingMoveTemplate *template.Template
+
 // Parse all templates.
 func init() {
+	invalidCommandTemplate = template.Must(template.New("").Parse(invalidCommandTemplateText))
 	initialResponseTemplate = template.Must(template.New("").Parse(initialResponseTemplateText))
 	starterMessageTemplate = template.Must(template.New("").Parse(starterMessageTemplateText))
 	starterInstructionsTemplate = template.Must(template.New("").Parse(starterInstructionsTemplateText))
@@ -331,7 +350,9 @@ func init() {
 	battlingForfeitTemplate = template.Must(template.New("").Parse(battlingForfeitTemplateText))
 	battlingHelpTemplate = template.Must(template.New("").Parse(battlingHelpTemplateText))
 	moveConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
-	switchConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
+	switchConfirmationTemplate = template.Must(template.New("").Parse(switchConfirmationTemplateText))
 	actionOptionsTemplate = template.Must(template.New("").Parse(actionOptionsTemplateText))
 	moveReportTemplate = template.Must(template.New("").Parse(moveReportTemplateText))
+	switchPokemonTemplate = template.Must(template.New("").Parse(switchPokemonTemplateText))
+	faintedPokemonUsingMoveTemplate = template.Must(template.New("").Parse(faintedPokemonUsingMoveTemplateText))
 }

@@ -65,16 +65,21 @@ func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Bat
 
 	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
 
-	var tables []database.MoveLookupTable
+	var gaeTables []*GAEMoveLookupTable
 
 	_, err := datastore.NewQuery("move lookup table").
 		Ancestor(battleKey).
-		GetAll(ctx, &tables)
+		GetAll(ctx, &gaeTables)
 	if err != nil {
 		return make([]database.MoveLookupTable, 0), false, err
 	}
-	if len(tables) == 0 {
-		return tables, false, nil
+	if len(gaeTables) == 0 {
+		return make([]database.MoveLookupTable, 0), false, nil
+	}
+
+	tables := make([]database.MoveLookupTable, len(gaeTables))
+	for i, val := range gaeTables {
+		tables[i] = val
 	}
 
 	return tables, true, nil

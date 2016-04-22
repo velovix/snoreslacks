@@ -24,6 +24,10 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 	}
 	inBattle := found
 
+	if inBattle {
+		log.Infof(ctx, "the trainer is in a battle so we will show additional information")
+	}
+
 	for _, val := range currTrainer.pkmn {
 		p := val.GetPokemon()
 
@@ -32,7 +36,6 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 		if inBattle {
 			// Fill in special Pokemon in-battle data if need be
 
-			var statusCondition string
 			inBattleStats, found, err := db.LoadPokemonBattleInfo(ctx, b, p.UUID)
 			if err != nil {
 				regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch Pokemon battle info")
@@ -44,16 +47,18 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 				// The Pokemon has been in this battle, so there is battle info available
 
 				switch inBattleStats.GetPokemonBattleInfo().Ailment {
+				case pkmn.NoAilment:
+					statusCondition = "fine"
 				case pkmn.PoisonAilment:
-					statusCondition += "poisoned "
+					statusCondition = "poisoned"
 				case pkmn.FreezeAilment:
-					statusCondition += "frozen "
+					statusCondition = "frozen"
 				case pkmn.ParalysisAilment:
-					statusCondition += "paralyzed "
+					statusCondition = "paralyzed"
 				case pkmn.BurnAilment:
-					statusCondition += "burned "
+					statusCondition = "burned"
 				case pkmn.SleepAilment:
-					statusCondition += "asleep "
+					statusCondition = "asleep"
 				}
 
 				currHP = inBattleStats.GetPokemonBattleInfo().CurrHP
@@ -87,7 +92,11 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 
 	// Populate the template
 	templData := &bytes.Buffer{}
-	err = viewPartyTemplate.Execute(templData, viewPartyTemplateInfo)
+	if inBattle {
+		err = viewPartyInBattleTemplate.Execute(templData, viewPartyTemplateInfo)
+	} else {
+		err = viewPartyTemplate.Execute(templData, viewPartyTemplateInfo)
+	}
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate view party template")
 		log.Errorf(ctx, "while populating view party template: %s", err)

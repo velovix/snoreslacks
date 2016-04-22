@@ -2,6 +2,7 @@ package pkmn
 
 import (
 	"errors"
+	"log"
 	"math/rand"
 )
 
@@ -148,28 +149,43 @@ func calcDamage(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move
 	if !ok {
 		return 0, 0, false, errors.New("no type found for type name '" + target.Type1 + "'")
 	}
-	targetType2, ok := NameToType(target.Type2)
-	if !ok {
-		return 0, 0, false, errors.New("no type found for type name '" + target.Type2 + "'")
+	var targetType2 Type
+	if target.Type2 != "" {
+		targetType2, ok = NameToType(target.Type2)
+		if !ok {
+			return 0, 0, false, errors.New("no type found for type name '" + target.Type2 + "'")
+		}
 	}
+
+	log.Printf("Target types: %+v %+v", targetType1, targetType2)
 
 	// Calculate same type attack bonus
 	stab := 1.0
 	if user.Type1 == move.Type || user.Type2 == move.Type {
 		stab = 1.5
 	}
+	log.Printf("Stab: %v", stab)
 	// Calculate type effectiveness
-	typeEff := targetType1.Mod(move.Type) * targetType2.Mod(move.Type)
+	typeEff := 1.0
+	typeEff *= targetType1.Mod(move.Type)
+	log.Printf("Type 1 mod: %v", typeEff)
+	if target.Type2 != "" {
+		typeEff *= targetType2.Mod(move.Type)
+		log.Printf("Type 2 mod: %v", targetType2.Mod(move.Type))
+	}
 	// Calculate critical hit effectiveness
 	crit := 1.0
 	if float64(rand.Intn(100)+1) <= critChance(move.CritRate) {
 		crit = 1.5
 	}
+	log.Printf("Critical hit: %v", crit)
 	// Calculate the random number
 	random := float64(rand.Intn(15)+85) / 100.0
+	log.Printf("Random: %v", crit)
 
 	// Calculate the modifier
 	modifier := stab * typeEff * crit * random
+	log.Printf("Modifier: %v", modifier)
 
 	// Calculate the user's special or physical attack and the target's
 	// physical or special defense
@@ -181,6 +197,8 @@ func calcDamage(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move
 		att = float64(CalcIBSpAtt(*user, *userBI))
 		def = float64(CalcIBDefense(*target, *targetBI))
 	}
+	log.Printf("Att: %v", att)
+	log.Printf("Def: %v", def)
 
 	// Calculate the damage
 	return int(((((2.0*float64(user.Level)+10)/250.0)*(att/def))*float64(move.Power) + 2.0) * modifier), int(typeEff), (crit > 1.0), nil
@@ -238,6 +256,9 @@ func RunMove(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Mo
 				mr.SpeedStageChange = statChange.Change
 			}
 		}
+
+		// We don't care about type effectiveness for status moves
+		mr.Effectiveness = 1.0
 	} else {
 		// Calculate the damage done by the move
 		damage, effectiveness, crit, err := calcDamage(user, target, userBI, targetBI, move)

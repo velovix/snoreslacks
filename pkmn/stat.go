@@ -20,32 +20,32 @@ func CalcOOBHP(s Stat, pkmn Pokemon) int {
 
 // CalcIBHP calculates the in-battle attack stat of the Pokemon.
 func CalcIBHP(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
-	return 0
+	return CalcOOBStat(pkmn.HP, pkmn)
 }
 
 // CalcIBAttack calculates the in-battle attack stat of the Pokemon.
 func CalcIBAttack(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
-	return 0
+	return ((((2*pkmn.Attack.Base + pkmn.Attack.IV + (pkmn.Attack.EV / 4)) * pkmn.Level) / 100) + 5)
 }
 
 // CalcIBDefense calculates the in-battle defense stat of the Pokemon.
 func CalcIBDefense(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
-	return 0
+	return ((((2*pkmn.Defense.Base + pkmn.Defense.IV + (pkmn.Defense.EV / 4)) * pkmn.Level) / 100) + 5)
 }
 
 // CalcIBSpAtt calculates the in-battle special attack stat of the Pokemon.
 func CalcIBSpAtt(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
-	return 0
+	return ((((2*pkmn.SpAttack.Base + pkmn.SpAttack.IV + (pkmn.SpAttack.EV / 4)) * pkmn.Level) / 100) + 5)
 }
 
 // CalcIBSpDef calculates the in-battle special defense stat of the Pokemon.
 func CalcIBSpDef(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
-	return 0
+	return ((((2*pkmn.SpDefense.Base + pkmn.SpDefense.IV + (pkmn.SpDefense.EV / 4)) * pkmn.Level) / 100) + 5)
 }
 
 // CalcIBSpeed calculates the in-battle speed stat of the Pokemon.
 func CalcIBSpeed(pkmn Pokemon, pkmnBI PokemonBattleInfo) int {
-	return 0
+	return ((((2*pkmn.Speed.Base + pkmn.Speed.IV + (pkmn.Speed.EV / 4)) * pkmn.Level) / 100) + 5)
 }
 
 // CalcIBAccuracy calculates the in-battle accuracy of the Pokemon in percent.
