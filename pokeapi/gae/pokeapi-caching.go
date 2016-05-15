@@ -27,6 +27,7 @@ func idFromURL(url string) (int, error) {
 	return id, nil
 }
 
+// GAEFetcher is the App Engine implementation of a PokeAPI fetcher.
 type GAEFetcher struct{}
 
 // FetchMove wraps around the FetchMove method provided by the PokeAPI
@@ -49,7 +50,10 @@ func (f GAEFetcher) FetchMove(ctx context.Context, client *http.Client, id int) 
 		// Encode the move structure as a gob
 		buf := &bytes.Buffer{}
 		enc := gob.NewEncoder(buf)
-		enc.Encode(move)
+		err = enc.Encode(move)
+		if err != nil {
+			return pokeapi.Move{}, err
+		}
 
 		// Add the data to the cache
 		cacheItem := &memcache.Item{
@@ -72,7 +76,10 @@ func (f GAEFetcher) FetchMove(ctx context.Context, client *http.Client, id int) 
 	var move pokeapi.Move
 	buf := bytes.NewBuffer(item.Value)
 	dec := gob.NewDecoder(buf)
-	dec.Decode(&move)
+	err = dec.Decode(&move)
+	if err != nil {
+		return pokeapi.Move{}, err
+	}
 	return move, nil
 
 }
@@ -97,7 +104,10 @@ func (f GAEFetcher) FetchPokemon(ctx context.Context, client *http.Client, id in
 		// Encode the Pokemon structure as a gob
 		buf := &bytes.Buffer{}
 		enc := gob.NewEncoder(buf)
-		enc.Encode(pkmn)
+		err = enc.Encode(pkmn)
+		if err != nil {
+			return pokeapi.Pokemon{}, err
+		}
 
 		// Add the data to the cache
 		cacheItem := &memcache.Item{
@@ -120,7 +130,10 @@ func (f GAEFetcher) FetchPokemon(ctx context.Context, client *http.Client, id in
 	var pkmn pokeapi.Pokemon
 	buf := bytes.NewBuffer(item.Value)
 	dec := gob.NewDecoder(buf)
-	dec.Decode(&pkmn)
+	err = dec.Decode(&pkmn)
+	if err != nil {
+		return pokeapi.Pokemon{}, err
+	}
 	return pkmn, nil
 }
 

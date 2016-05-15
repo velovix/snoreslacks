@@ -9,6 +9,7 @@ package gaedatabase
 
 import "github.com/velovix/snoreslacks/database"
 
+// GAEDatabase is the datastore implementation of the database interface.
 type GAEDatabase struct{}
 
 func init() {

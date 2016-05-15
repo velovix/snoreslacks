@@ -9,6 +9,7 @@ import (
 	"google.golang.org/appengine/datastore"
 )
 
+// GAETrainer is a database object wrapper of a trainer for datastore.
 type GAETrainer struct {
 	pkmn.Trainer
 }
@@ -19,6 +20,7 @@ func (db GAEDatabase) NewTrainer(t pkmn.Trainer) database.Trainer {
 	return &GAETrainer{Trainer: t}
 }
 
+// GetTrainer returns the underlying trainer from the database object.
 func (t *GAETrainer) GetTrainer() *pkmn.Trainer {
 	return &t.Trainer
 }
@@ -97,9 +99,8 @@ func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Train
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
 			return "", false, nil
-		} else {
-			return "", false, err
 		}
+		return "", false, err
 	}
 
 	return url.URL, true, nil

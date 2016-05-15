@@ -218,11 +218,10 @@ To select an action, use the "move" or "switch" command along with the ID of you
 {{ printf "\u0060\u0060\u0060" -}}
 MOVES
 {{ range .MoveTable.Moves }}  {{ .ID }}: {{ .MoveName }}
-{{ end }}
-
+{{ end -}}
 PARTY
 {{ range .PartyTable.Members }}  {{ .ID }}: {{ .PkmnName }}
-{{ end }}
+{{ end -}}
 {{ printf "\u0060\u0060\u0060" }}
 `
 var actionOptionsTemplate *template.Template
@@ -230,7 +229,7 @@ var actionOptionsTemplate *template.Template
 // Move report template. Contains a full textual representation of a move
 // report, telling trainers what happened when a move was used.
 var moveReportTemplateText = `
-{{ .UserName }} used {{ .MoveName }}!
+{{ .UserTrainerName }}'s {{ .UserPokemonName }} used {{ .MoveName }}!
 {{ if .Missed -}}
 But the attack missed!
 {{ else if .CriticalHit -}}
@@ -246,77 +245,78 @@ The move had no effect...
 {{ else -}}
 {{- end -}}
 {{ if .TargetDamage -}}
-{{ .TargetName }} took {{ .TargetDamage }} damage!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} took {{ .TargetDamage }} damage!
 {{ else -}}
 {{- end -}}
 {{ if .TargetDrain -}}
-{{ .UserName }} drained {{ .TargetDrain }} HP from {{ .TargetName }}!
+{{ .UserTrainerName }}'s {{ .UserPokemonName }} drained {{ .TargetDrain }} HP from {{ .TargetTrainerName }}'s {{ .TargetPokemonName }}!
 {{ else -}}
 {{- end -}}
 {{ if gt .UserHealing 0 -}}
-{{ .UserName }} healed {{ .UserHealing }} HP!
+{{ .UserTrainerName }}'s {{ .UserPokemonName }} healed {{ .UserHealing }} HP!
 {{ else if lt .UserHealing 0 -}}
-{{ .UserName }} suffered knockback damage...
+{{ .UserTrainerName }}'s {{ .UserPokemonName }} suffered knockback damage...
 {{ else -}}
 {{- end -}}
 {{ if .UserFainted -}}
-{{ .UserName }} has fainted!
+{{ .UserTrainerName }}'s {{ .UserPokemonName }} has fainted!
 {{ else -}}
 {{- end -}}
 {{ if .TargetFainted -}}
-{{ .TargetName }} has fainted!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has fainted!
 {{ else -}}
 {{- end -}}
 {{ if gt .AttStageChange 0 -}}
-{{ .TargetName }}'s attack has increased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s attack has increased!
 {{ else if lt .AttStageChange 0 -}}
-{{ .TargetName }}'s attack has decreased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s attack has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .DefStageChange 0 -}}
-{{ .TargetName }}'s defense has increased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s defense has increased!
 {{ else if lt .DefStageChange 0 -}}
-{{ .TargetName }}'s defense has decreased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s defense has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .SpAttStageChange 0 -}}
-{{ .TargetName }}'s special attack has increased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special attack has increased!
 {{ else if lt .SpAttStageChange 0 -}}
-{{ .TargetName }}'s special attack has decreased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special attack has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .SpDefStageChange 0 -}}
-{{ .TargetName }}'s special defense has increased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special defense has increased!
 {{ else if lt .SpDefStageChange 0 -}}
-{{ .TargetName }}'s special defense has decreased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special defense has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .SpeedStageChange 0 -}}
-{{ .TargetName }}'s speed has increased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s speed has increased!
 {{ else if lt .SpeedStageChange 0 -}}
-{{ .TargetName }}'s speed has decreased!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s speed has decreased!
 {{ else -}}
 {{- end -}}
 {{ if .Poisoned }}
-{{ .TargetName }} has been poisoned!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been poisoned!
 {{ else -}}
 {{- end -}}
 {{ if .Paralyzed }}
-{{ .TargetName }} has been paralyzed!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been paralyzed!
 {{ else -}}
 {{- end -}}
 {{ if .Asleep }}
-{{ .TargetName }} has fallen asleep!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has fallen asleep!
 {{ else -}}
 {{- end -}}
 {{ if .Frozen }}
-{{ .TargetName }} has been frozen!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been frozen!
 {{ else -}}
 {{- end -}}
 {{ if .Burned }}
-{{ .TargetName }} has been burned!
+{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been burned!
 {{ else -}}
 {{- end -}}
+{{ printf "\u0060" }}{{ printf "%-15s" .TargetPokemonName }}: {{ .UserHPBar }}{{ printf "\u0060" }}
 `
 var moveReportTemplate *template.Template
 
@@ -330,6 +330,11 @@ var faintedPokemonUsingMoveTemplateText = `
 A fainted Pokémon cannot use a move. You must switch to a battle-ready Pokémon first.
 `
 var faintedPokemonUsingMoveTemplate *template.Template
+
+var trainerLostTemplateText = `
+{{ .LostTrainer }} is out of usable Pokémon. {{ .WonTrainer }} has won the battle!
+`
+var trainerLostTemplate *template.Template
 
 // Parse all templates.
 func init() {
@@ -355,4 +360,5 @@ func init() {
 	moveReportTemplate = template.Must(template.New("").Parse(moveReportTemplateText))
 	switchPokemonTemplate = template.Must(template.New("").Parse(switchPokemonTemplateText))
 	faintedPokemonUsingMoveTemplate = template.Must(template.New("").Parse(faintedPokemonUsingMoveTemplateText))
+	trainerLostTemplate = template.Must(template.New("").Parse(trainerLostTemplateText))
 }

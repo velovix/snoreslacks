@@ -7,6 +7,8 @@ import (
 	"google.golang.org/appengine/datastore"
 )
 
+// GAEMoveLookupTable is the database object wrapper of a move lookup table for
+// datastore.
 type GAEMoveLookupTable struct {
 	pkmn.MoveLookupTable
 }
@@ -17,10 +19,14 @@ func (db GAEDatabase) NewMoveLookupTable(mlt pkmn.MoveLookupTable) database.Move
 	return &GAEMoveLookupTable{MoveLookupTable: mlt}
 }
 
+// GetMoveLookupTable returns the underlying move lookup table from the
+// database object.
 func (mlt *GAEMoveLookupTable) GetMoveLookupTable() *pkmn.MoveLookupTable {
 	return &mlt.MoveLookupTable
 }
 
+// GAEPartyMemberLookupTable is the database wrapper object of a party member
+// lookup table for datastore.
 type GAEPartyMemberLookupTable struct {
 	pkmn.PartyMemberLookupTable
 }
@@ -31,6 +37,8 @@ func (db GAEDatabase) NewPartyMemberLookupTable(pmlt pkmn.PartyMemberLookupTable
 	return &GAEPartyMemberLookupTable{PartyMemberLookupTable: pmlt}
 }
 
+// GetPartyMemberLookupTable returns the underlying party member lookup table
+// from the database object.
 func (pmlt *GAEPartyMemberLookupTable) GetPartyMemberLookupTable() *pkmn.PartyMemberLookupTable {
 	return &pmlt.PartyMemberLookupTable
 }
@@ -57,6 +65,9 @@ func (db GAEDatabase) SaveMoveLookupTable(ctx context.Context, dbmlt database.Mo
 	return nil
 }
 
+// LoadMoveLookupTables loads all move lookup tables attached to the given
+// battle. If none are found, an empty slice is returned and the second return
+// value is false.
 func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Battle) ([]database.MoveLookupTable, bool, error) {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
@@ -85,6 +96,37 @@ func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Bat
 	return tables, true, nil
 }
 
+// DeleteMoveLookupTables deletes all move lookup tables under the given battle.
+func (db GAEDatabase) DeleteMoveLookupTables(ctx context.Context, dbb database.Battle) error {
+	b, ok := dbb.(*GAEBattle)
+	if !ok {
+		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
+	}
+
+	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+
+	// Find all move lookup tables under this battle
+	keys, err := datastore.NewQuery("move lookup table").
+		KeysOnly().
+		Ancestor(battleKey).
+		GetAll(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	// Delete all the move lookup tables
+	for _, key := range keys {
+		err = datastore.Delete(ctx, key)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SavePartyMemberLookupTable saves the given party member lookup table under
+// the given battle.
 func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt database.PartyMemberLookupTable, dbb database.Battle) error {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
@@ -106,6 +148,9 @@ func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt dat
 	return nil
 }
 
+// LoadPartyMemberLookupTables loads all party member lookup tables attached to
+// the given battle. If none are found, an empty slice is returned and the
+// second return value is false.
 func (db GAEDatabase) LoadPartyMemberLookupTables(ctx context.Context, dbb database.Battle) ([]database.PartyMemberLookupTable, bool, error) {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
@@ -127,4 +172,34 @@ func (db GAEDatabase) LoadPartyMemberLookupTables(ctx context.Context, dbb datab
 	}
 
 	return tables, true, nil
+}
+
+// DeletePartyMemberLookupTables deletes all party member lookup tables under
+// the given battle.
+func (db GAEDatabase) DeletePartyMemberLookupTables(ctx context.Context, dbb database.Battle) error {
+	b, ok := dbb.(*GAEBattle)
+	if !ok {
+		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
+	}
+
+	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+
+	// Find all party member lookup tables under this battle
+	keys, err := datastore.NewQuery("party member lookup table").
+		KeysOnly().
+		Ancestor(battleKey).
+		GetAll(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	// Delete all the party member lookup tables
+	for _, key := range keys {
+		err = datastore.Delete(ctx, key)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

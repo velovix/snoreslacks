@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"errors"
 	"net/http"
 	"strings"
@@ -40,12 +39,14 @@ func fetchStarters(ctx context.Context, client *http.Client, fetcher pokeapi.Fet
 // newTrainerHandler manages requests made by new trainers. It will create the
 // trainer data for this Slack user and respond with information about choosing
 // their starter.
-func newTrainerHandler(ctx context.Context, db database.Database, log logging.Logger, client *http.Client, r slackRequest, fetcher pokeapi.Fetcher, currTrainer trainerData) {
+func newTrainerHandler(ctx context.Context, db database.Database, log logging.Logger,
+	client *http.Client, r slackRequest, fetcher pokeapi.Fetcher, currTrainer trainerData) {
+
 	// Construct a new trainer
 	currTrainer.GetTrainer().Name = r.username
 	currTrainer.GetTrainer().Mode = pkmn.StarterTrainerMode // The trainer needs to choose its starter
 
-	log.Infof(ctx, "%+v", *currTrainer.GetTrainer())
+	log.Infof(ctx, "created a new trainer: %+v", *currTrainer.GetTrainer())
 
 	// Fetch information on the starters
 	starters, err := fetchStarters(ctx, client, fetcher)
@@ -63,18 +64,12 @@ func newTrainerHandler(ctx context.Context, db database.Database, log logging.Lo
 		Username: currTrainer.GetTrainer().Name,
 		Starters: starters}
 
-	// Populate the template
-	templData := &bytes.Buffer{}
-	err = starterMessageTemplate.Execute(templData, starterMessageTemplateInfo)
+	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, starterMessageTemplate, starterMessageTemplateInfo)
 	if err != nil {
+		// The trainer did not get our response. Abort operation
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate starter message template")
-		log.Errorf(ctx, "while populating starter message template: %s", err)
+		log.Errorf(ctx, "while sending starter message template: %s", err)
 		return
-	}
-
-	err = regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-	if err != nil {
-		log.Errorf(ctx, "while sending a Slack request: %s", err)
 	} else {
 		// Save the trainer to the database if the Slack request was successful
 		err = db.SaveTrainer(ctx, currTrainer.Trainer)
@@ -83,14 +78,15 @@ func newTrainerHandler(ctx context.Context, db database.Database, log logging.Lo
 			log.Errorf(ctx, "while saving a new trainer: %s", err)
 			return
 		}
-
 	}
 }
 
 // choosingStarterHandler manages requests where the trainer says what starter
 // they want. It will give the trainer that starter and allow them to play
 // normally.
-func choosingStarterHandler(ctx context.Context, db database.Database, log logging.Logger, client *http.Client, r slackRequest, fetcher pokeapi.Fetcher, currTrainer trainerData) {
+func choosingStarterHandler(ctx context.Context, db database.Database, log logging.Logger,
+	client *http.Client, r slackRequest, fetcher pokeapi.Fetcher, currTrainer trainerData) {
+
 	// Fetch information on the starters
 	starters, err := fetchStarters(ctx, client, fetcher)
 	if err != nil {
@@ -99,6 +95,7 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 		return
 	}
 
+	// Check if the user chose a valid starter
 	validStarter := false
 	for _, val := range starters {
 		if strings.ToUpper(val.Name) == strings.ToUpper(r.text) {
@@ -123,27 +120,24 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 		// The trainer chose a starter that doesn't exist or failed ot choose a
 		// starter at all
 
-		templData := &bytes.Buffer{}
 		if r.text == "" {
 			// The trainer sent an empty request
-			err = starterInstructionsTemplate.Execute(templData, nil)
+			err = regularSlackTemplRequest(client, currTrainer.lastContactURL, starterInstructionsTemplate, nil)
 			if err != nil {
 				regularSlackRequest(client, currTrainer.lastContactURL, "could not populate starter instructions template")
-				log.Errorf(ctx, "while populating a starter instructions template: %s", err)
+				log.Errorf(ctx, "while sending a starter instructions template: %s", err)
 				return
 			}
 		} else {
 			// The trainer requested a starter, but it doesn't exist
 			invalidStarterTemplateInfo := strings.ToLower(r.text)
-			err = invalidStarterTemplate.Execute(templData, invalidStarterTemplateInfo)
+			err = regularSlackTemplRequest(client, currTrainer.lastContactURL, invalidStarterTemplate, invalidStarterTemplateInfo)
 			if err != nil {
 				regularSlackRequest(client, currTrainer.lastContactURL, "could not populate invalid starter template")
-				log.Errorf(ctx, "while populating invalid starter template: %s", err)
+				log.Errorf(ctx, "while sending invalid starter template: %s", err)
 				return
 			}
 		}
-
-		regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
 		return
 	}
 
@@ -158,27 +152,13 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 			TrainerName: currTrainer.GetTrainer().Name}
 
 	// Populate the template
-	templData := &bytes.Buffer{}
-	err = starterPickedTemplate.Execute(templData, starterPickedTemplateInfo)
+	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, starterPickedTemplate, starterPickedTemplateInfo)
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate starter picked template")
-		log.Errorf(ctx, "while populating starter picked template: %s", err)
+		log.Errorf(ctx, "while sending starter picked template: %s", err)
 		return
-	}
-
-	// Save the trainer
-	err = db.SaveTrainer(ctx, currTrainer.Trainer)
-	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")
-		log.Errorf(ctx, "while saving trainer information: %s", err)
-		return
-	}
-
-	err = regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-	if err != nil {
-		log.Errorf(ctx, "while sending a Slack request: %s", err)
 	} else {
-		// Save the trainer if Slack received the request
+		// Save the trainer and party if Slack received the request
 		err = db.SaveTrainer(ctx, currTrainer.Trainer)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")

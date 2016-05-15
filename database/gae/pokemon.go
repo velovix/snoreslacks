@@ -7,6 +7,7 @@ import (
 	"google.golang.org/appengine/datastore"
 )
 
+// GAEPokemon is the database object wrapper of a Pokemon for datastore.
 type GAEPokemon struct {
 	pkmn.Pokemon
 }
@@ -17,6 +18,7 @@ func (db GAEDatabase) NewPokemon(p pkmn.Pokemon) database.Pokemon {
 	return &GAEPokemon{Pokemon: p}
 }
 
+// GetPokemon returns the underlying Pokemon from the database object.
 func (pkmn *GAEPokemon) GetPokemon() *pkmn.Pokemon {
 	return &pkmn.Pokemon
 }

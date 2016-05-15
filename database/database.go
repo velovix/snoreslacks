@@ -95,8 +95,11 @@ type Database interface {
 	// LoadBattleTrainerIsIn returns a battle the given Trainer name is involved
 	// in.
 	LoadBattleTrainerIsIn(ctx context.Context, pName string) (Battle, bool, error)
-	// DeleteTrainer deletes the battle that the two Trainers are involved in.
+	// DeleteTrainer deletes the battle that the two trainers are involved in.
 	DeleteBattle(ctx context.Context, p1Name, p2Name string) error
+	// PurgeBattle deletes the battle that the two trainers are involved in and
+	// purges any relating data having to do with this battle.
+	PurgeBattle(ctx context.Context, p1Name, p2Name string) error
 
 	// NewMoveLookupTable creates a database move lookup table that is ready
 	// to be saved from the given pkmn.MoveLookupTable.
@@ -107,6 +110,9 @@ type Database interface {
 	// LoadMoveLookupTables Loads all the move lookup tables that the given
 	// battle object owns.
 	LoadMoveLookupTables(ctx context.Context, b Battle) ([]MoveLookupTable, bool, error)
+	// DeleteMoveLookupTables deletes all move lookup tables under the given
+	// battle.
+	DeleteMoveLookupTables(ctx context.Context, b Battle) error
 
 	// NewPartyMemberLookupTable creates a database party member lookup table
 	// that is ready to be saved from the given pkmn.PartyMemberLookupTable.
@@ -117,6 +123,9 @@ type Database interface {
 	// LoadPartyMemberLookupTables Loads all the party member lookup tables
 	// that the given Battle object owns.
 	LoadPartyMemberLookupTables(ctx context.Context, b Battle) ([]PartyMemberLookupTable, bool, error)
+	// DeletePartyMemberLookupTables deletes all party member lookup tables
+	// under the given battle.
+	DeletePartyMemberLookupTables(ctx context.Context, b Battle) error
 
 	// NewTrainerBattleInfo creates a new trainer battle info that is ready to
 	// be saved from the given pkmn.TrainerBattleInfo.
@@ -128,6 +137,9 @@ type Database interface {
 	// trainer name and battle. The second return value is true if the battle
 	// info exists and was retrieved, false otherwise.
 	LoadTrainerBattleInfo(ctx context.Context, b Battle, tName string) (TrainerBattleInfo, bool, error)
+	// DeleteTrainerBattleInfos deletes all trainer battle infos under the
+	// given battle.
+	DeleteTrainerBattleInfos(ctx context.Context, b Battle) error
 
 	// NewPokemonBattleInfo creates a new Pokemon battle info that is ready to
 	// be saved from the given pkmn.PokemonBattleInfo.
@@ -139,6 +151,9 @@ type Database interface {
 	// Pokemon UUID and battle. The second return value is true if the battle
 	// info exists and was retrieved, false otherwise.
 	LoadPokemonBattleInfo(ctx context.Context, b Battle, uuid string) (PokemonBattleInfo, bool, error)
+	// DeletePokemonBattleInfos deletes all Pokemon battle infos under the
+	// given battle.
+	DeletePokemonBattleInfos(ctx context.Context, b Battle) error
 }
 
 var implementations map[string]Database
@@ -147,10 +162,14 @@ func init() {
 	implementations = make(map[string]Database)
 }
 
+// Register registers an implementation of the Database interface under the
+// given name.
 func Register(name string, db Database) {
 	implementations[name] = db
 }
 
+// Get returns the implementation of Database with the given name, or an error
+// if no such implementation exists.
 func Get(name string) (Database, error) {
 	if db, ok := implementations[name]; ok {
 		return db, nil

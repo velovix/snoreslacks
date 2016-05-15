@@ -11,6 +11,7 @@ import (
 	"github.com/velovix/snoreslacks/logging"
 	"github.com/velovix/snoreslacks/pokeapi"
 
+	// Get the GAE implementations
 	_ "github.com/velovix/snoreslacks/database/gae"
 	_ "github.com/velovix/snoreslacks/logging/gae"
 	_ "github.com/velovix/snoreslacks/pokeapi/gae"

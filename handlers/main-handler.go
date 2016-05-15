@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"net/http"
 	"time"
 
@@ -61,17 +60,11 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 			// Time to send the message
 		}
 
-		// Send the message
-		templData := &bytes.Buffer{}
-		err = initialResponseTemplate.Execute(templData, "")
+		// Send the templated message
+		err = regularSlackTemplRequest(client, r.responseURL, initialResponseTemplate, nil)
 		if err != nil {
 			regularSlackRequest(client, r.responseURL, "could not populate initial response template")
-			log.Errorf(ctx, "%s", err)
-			return
-		}
-		err = regularSlackRequest(client, r.responseURL, string(templData.Bytes()))
-		if err != nil {
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending the initial response template: %s", err)
 			return
 		}
 	}(slackReq)

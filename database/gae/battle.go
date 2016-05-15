@@ -2,6 +2,7 @@ package gaedatabase
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/pkmn"
@@ -21,6 +22,7 @@ func battleNameFromTrainerNames(p1, p2 string) string {
 	return p1 + "/" + p2
 }
 
+// GAEBattle is a battle database wrapper object for datastore.
 type GAEBattle struct {
 	pkmn.Battle
 }
@@ -31,6 +33,7 @@ func (db GAEDatabase) NewBattle(b pkmn.Battle) database.Battle {
 	return &GAEBattle{Battle: b}
 }
 
+// GetBattle returns the underlying battle from the database object.
 func (b *GAEBattle) GetBattle() *pkmn.Battle {
 	return &b.Battle
 }
@@ -61,14 +64,15 @@ func (db GAEDatabase) LoadBattle(ctx context.Context, p1Name, p2Name string) (da
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
 			return &GAEBattle{}, false, nil
-		} else {
-			return &GAEBattle{}, false, err
 		}
+		return &GAEBattle{}, false, err
 	}
 
 	return &battle, true, nil
 }
 
+// LoadBattleTrainerIsIn loads a battle that the trainer is participating in,
+// or false as the second value if the trainer is not in any battles.
 func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (database.Battle, bool, error) {
 	var battles []GAEBattle
 
@@ -106,8 +110,42 @@ func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (
 	return &GAEBattle{}, false, nil
 }
 
-// DeleteBattle deletes the battle from the Datastore
+// DeleteBattle deletes the battle from the datastore
 func (db GAEDatabase) DeleteBattle(ctx context.Context, p1Name, p2Name string) error {
-	battleKey := datastore.NewKey(ctx, "battle", p1Name+"+"+p2Name, 0, nil)
+	battleKey := datastore.NewKey(ctx, "battle", battleNameFromTrainerNames(p1Name, p2Name), 0, nil)
 	return datastore.Delete(ctx, battleKey)
+}
+
+// PurgeBattle deletes the battle from the Datastore and any relating data.
+func (db GAEDatabase) PurgeBattle(ctx context.Context, p1Name, p2Name string) error {
+	b, found, err := db.LoadBattle(ctx, p1Name, p2Name)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("no battle found with player 1: %s player 2: %s", p1Name, p2Name)
+	}
+
+	err = db.DeleteTrainerBattleInfos(ctx, b)
+	if err != nil {
+		return err
+	}
+	err = db.DeletePokemonBattleInfos(ctx, b)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteMoveLookupTables(ctx, b)
+	if err != nil {
+		return err
+	}
+	err = db.DeletePartyMemberLookupTables(ctx, b)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteBattle(ctx, p1Name, p2Name)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

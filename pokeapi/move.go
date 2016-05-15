@@ -10,6 +10,7 @@ import (
 	"github.com/velovix/snoreslacks/pkmn"
 )
 
+// Move describes a PokeAPI move.
 type Move struct {
 	ID           int    `json:"id"`
 	Name         string `json:"name"`
@@ -63,7 +64,7 @@ type Move struct {
 // function should be avoided in favor of using a Fetcher.
 func FetchMove(id int, client *http.Client) (Move, error) {
 	// Query the API
-	resp, err := client.Get(apiUrl + moveEP + strconv.Itoa(id) + "/")
+	resp, err := client.Get(apiURL + moveEP + strconv.Itoa(id) + "/")
 	if err != nil {
 		return Move{}, err
 	}

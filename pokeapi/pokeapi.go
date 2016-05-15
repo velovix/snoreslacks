@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	apiUrl = "http://pokeapi.co/api/v2/"
+	apiURL = "http://pokeapi.co/api/v2/"
 
 	pokemonEP = "pokemon/"
 	moveEP    = "move/"

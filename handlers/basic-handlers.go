@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"net/http"
 
 	"github.com/velovix/snoreslacks/database"
@@ -11,18 +10,38 @@ import (
 	"golang.org/x/net/context"
 )
 
+// partyInfoAilmentText returns text describing the given ailment in a format
+// for the party viewer.
+func partyInfoAilmentText(ailment pkmn.Ailment) string {
+	switch ailment {
+	case pkmn.NoAilment:
+		return "fine"
+	case pkmn.PoisonAilment:
+		return "poisoned"
+	case pkmn.FreezeAilment:
+		return "frozen"
+	case pkmn.ParalysisAilment:
+		return "paralyzed"
+	case pkmn.BurnAilment:
+		return "burned"
+	case pkmn.SleepAilment:
+		return "asleep"
+	default:
+		panic("unsupported ailment type")
+	}
+}
+
 // viewPartyHandler manages requests to print the trainer's full party.
 func viewPartyHandler(ctx context.Context, db database.Database, log logging.Logger, client *http.Client, r slackRequest, currTrainer trainerData) {
-	viewPartyTemplateInfo := make([]viewSinglePokemonTemplateInfo, 0)
+	var viewPartyTemplateInfo []viewSinglePokemonTemplateInfo
 
 	// Check if the trainer is in a battle
-	b, found, err := db.LoadBattleTrainerIsIn(ctx, currTrainer.GetTrainer().Name)
+	b, inBattle, err := loadBattleTrainerIsIn(ctx, db, log, client, currTrainer.lastContactURL, false,
+		"while checking if the trainer is in a battle",
+		currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch battle trainer may be in")
-		log.Errorf(ctx, "while checking if the trainer is in a battle: %s", err)
-		return
+		return // Abort operation
 	}
-	inBattle := found
 
 	if inBattle {
 		log.Infof(ctx, "the trainer is in a battle so we will show additional information")
@@ -36,36 +55,20 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 		if inBattle {
 			// Fill in special Pokemon in-battle data if need be
 
-			inBattleStats, found, err := db.LoadPokemonBattleInfo(ctx, b, p.UUID)
+			inBattleStats, found, err := loadPokemonBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, false,
+				"while fetching Pokemon battle info",
+				b, p.UUID)
 			if err != nil {
-				regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch Pokemon battle info")
-				log.Errorf(ctx, "while fetching Pokemon battle info: %s", err)
-				return
+				return // Abort operation
 			}
 
 			if found {
 				// The Pokemon has been in this battle, so there is battle info available
-
-				switch inBattleStats.GetPokemonBattleInfo().Ailment {
-				case pkmn.NoAilment:
-					statusCondition = "fine"
-				case pkmn.PoisonAilment:
-					statusCondition = "poisoned"
-				case pkmn.FreezeAilment:
-					statusCondition = "frozen"
-				case pkmn.ParalysisAilment:
-					statusCondition = "paralyzed"
-				case pkmn.BurnAilment:
-					statusCondition = "burned"
-				case pkmn.SleepAilment:
-					statusCondition = "asleep"
-				}
-
+				statusCondition = partyInfoAilmentText(inBattleStats.GetPokemonBattleInfo().Ailment)
 				currHP = inBattleStats.GetPokemonBattleInfo().CurrHP
 			} else {
 				// The trainer is in a battle, but this Pokemon has not been in
 				// a battle yet, so we can assume the Pokemon is unscathed.
-
 				currHP = pkmn.CalcOOBHP(p.HP, *p)
 				statusCondition = "none"
 			}
@@ -90,18 +93,15 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 				StatusCondition: statusCondition})
 	}
 
-	// Populate the template
-	templData := &bytes.Buffer{}
+	// Send the template
 	if inBattle {
-		err = viewPartyInBattleTemplate.Execute(templData, viewPartyTemplateInfo)
+		err = regularSlackTemplRequest(client, currTrainer.lastContactURL, viewPartyInBattleTemplate, viewPartyTemplateInfo)
 	} else {
-		err = viewPartyTemplate.Execute(templData, viewPartyTemplateInfo)
+		err = regularSlackTemplRequest(client, currTrainer.lastContactURL, viewPartyTemplate, viewPartyTemplateInfo)
 	}
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate view party template")
 		log.Errorf(ctx, "while populating view party template: %s", err)
 		return
 	}
-
-	regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
 }

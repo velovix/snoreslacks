@@ -68,7 +68,7 @@ func FetchPokemon(id int, client *http.Client) (Pokemon, error) {
 // request failed.
 func FetchPokemonAsBytes(id int, client *http.Client) ([]byte, error) {
 	// Query the API
-	resp, err := client.Get(apiUrl + pokemonEP + strconv.Itoa(id) + "/")
+	resp, err := client.Get(apiURL + pokemonEP + strconv.Itoa(id) + "/")
 	if err != nil {
 		return nil, err
 	}

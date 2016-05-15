@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"bytes"
 	"errors"
 	"math/rand"
 	"net/http"
+	"reflect"
 	"strconv"
 
 	"github.com/velovix/snoreslacks/database"
@@ -15,18 +15,36 @@ import (
 	"golang.org/x/net/context"
 )
 
+// makeTextHPBar creates an HP bar for the given Pokemon in text.
+func makeTextHPBar(p *pkmn.Pokemon, pBI *pkmn.PokemonBattleInfo) string {
+	percentHealth := (float64(pBI.CurrHP) / float64(pkmn.CalcOOBHP(p.HP, *p))) * 100.0
+	bar := "["
+
+	for i := 0; i < 15; i++ {
+		if percentHealth > (100.0 * (float64(i) / 15.0)) {
+			bar += "#"
+		} else {
+			bar += " "
+		}
+	}
+
+	return bar + "]"
+}
+
 // processTurn runs all required steps for a single battle turn, and returns
 // the modified Pokemon battle info. This function does not propigate errors
 // It deals with them like a handler does, so the caller should not worry about
-// notifying the user if this function fails. If it returns false, that should
-// be taken as a message that the current operation should be aborted.
+// notifying the user if this function fails. If the third return value is
+// true, then the battle is over and should be stopped. If the fourth return
+// value is false, that should be taken as a message that the current operation
+// should be aborted.
 //
 // This function should not save information to the database. Instead, it
 // should return data that needs to be saved for the caller to deal with.
 func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 	client *http.Client, r slackRequest, fetcher pokeapi.Fetcher,
 	p1, p2 trainerData, p1BI, p2BI database.TrainerBattleInfo,
-	b database.Battle) (database.PokemonBattleInfo, database.PokemonBattleInfo, bool) {
+	b database.Battle) (database.PokemonBattleInfo, database.PokemonBattleInfo, bool, bool) {
 
 	var err error
 
@@ -39,17 +57,11 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 	// case of errors so the caller can operate under the assumption that the
 	// user has been notified and that the current action should be aborted.
 	loadPokemonBI := func(pkmn database.Pokemon) (database.PokemonBattleInfo, bool) {
-		pkmnBI, found, err := db.LoadPokemonBattleInfo(ctx, b, pkmn.GetPokemon().UUID)
+		pkmnBI, _, err := loadPokemonBattleInfo(ctx, db, log, client, p1.lastContactURL, true,
+			"could not get Pokemon battle info",
+			b, pkmn.GetPokemon().UUID)
 		if err != nil {
-			regularSlackRequest(client, p1.lastContactURL, "could not get Pokemon battle info")
-			log.Errorf(ctx, "while fetching Pokemon battle info: %s", err)
-			return nil, false
-		}
-		if !found {
-			regularSlackRequest(client, p1.lastContactURL, "could not get Pokemon battle info")
-			err := errors.New("trainer '" + p1.GetTrainer().Name + "' current Pokemon has no battle info but is in a battle")
-			log.Errorf(ctx, "%s", err)
-			return nil, false
+			return nil, false // Abort operation
 		}
 		return pkmnBI, true
 	}
@@ -77,7 +89,7 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		if err != nil {
 			regularSlackRequest(client, p1.lastContactURL, "could not load move information")
 			log.Errorf(ctx, "%s", err)
-			return nil, nil, false
+			return nil, nil, false, false
 		}
 	}
 	if p2BI.GetTrainerBattleInfo().NextBattleAction.Type == pkmn.MoveBattleActionType {
@@ -86,7 +98,7 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		if err != nil {
 			regularSlackRequest(client, p1.lastContactURL, "could not load move information")
 			log.Errorf(ctx, "%s", err)
-			return nil, nil, false
+			return nil, nil, false, false
 		}
 	}
 
@@ -106,15 +118,12 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 
 		if userPkmnBI.GetPokemonBattleInfo().CurrHP <= 0 {
 			// The trainer tried to have a fainted Pokemon use a move
-			templData := &bytes.Buffer{}
-			err = faintedPokemonUsingMoveTemplate.Execute(templData, "")
+			err = regularSlackTemplRequest(client, t.lastContactURL, faintedPokemonUsingMoveTemplate, nil)
 			if err != nil {
 				regularSlackRequest(client, t.lastContactURL, "failed to populate failed Pokemon using move template")
-				log.Errorf(ctx, "%s", err)
+				log.Errorf(ctx, "while sending a fainted Pokemon using move template: %s", err)
 				return false, false
 			}
-
-			regularSlackRequest(client, t.lastContactURL, string(templData.Bytes()))
 			return false, false
 		}
 
@@ -123,32 +132,31 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 			userPkmnBI.GetPokemonBattleInfo(), targetPkmnBI.GetPokemonBattleInfo(), move)
 		if err != nil {
 			regularSlackRequest(client, t.lastContactURL, "could not run move")
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while running a move: %s", err)
 			return false, false
 		}
-
-		log.Infof(ctx, "Move report: %+v", mr)
 
 		// Send the move report
 		templInfo := struct {
 			pkmn.MoveReport
-			UserName   string
-			TargetName string
-			MoveName   string
+			UserTrainerName   string
+			UserPokemonName   string
+			UserHPBar         string
+			TargetTrainerName string
+			TargetPokemonName string
+			MoveName          string
 		}{
-			MoveReport: mr,
-			UserName:   t.GetTrainer().Name,
-			TargetName: opponent.GetTrainer().Name,
-			MoveName:   move.Name}
-		templData := &bytes.Buffer{}
-		err = moveReportTemplate.Execute(templData, templInfo)
+			MoveReport:        mr,
+			UserTrainerName:   t.GetTrainer().Name,
+			UserPokemonName:   userPkmn.GetPokemon().Name,
+			UserHPBar:         makeTextHPBar(targetPkmn.GetPokemon(), targetPkmnBI.GetPokemonBattleInfo()),
+			TargetTrainerName: opponent.GetTrainer().Name,
+			TargetPokemonName: targetPkmn.GetPokemon().Name,
+			MoveName:          move.Name}
+		err = publicSlackTemplRequest(client, t.lastContactURL, moveReportTemplate, templInfo)
 		if err != nil {
 			regularSlackRequest(client, t.lastContactURL, "could not populate move report template")
-			log.Errorf(ctx, "%s", err)
-			return false, false
-		}
-		err = regularSlackRequest(client, t.lastContactURL, string(templData.Bytes()))
-		if err != nil {
+			log.Errorf(ctx, "while sending a move report: %s", err)
 			return false, false
 		}
 
@@ -180,16 +188,10 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 			Switcher:         t.GetTrainer().Name,
 			WithdrawnPokemon: t.pkmn[prevPkmn].GetPokemon().Name,
 			SelectedPokemon:  t.pkmn[newPkmn].GetPokemon().Name}
-		templData := &bytes.Buffer{}
-		err = switchPokemonTemplate.Execute(templData, templInfo)
+		err = regularSlackTemplRequest(client, t.lastContactURL, switchPokemonTemplate, templInfo)
 		if err != nil {
 			regularSlackRequest(client, t.lastContactURL, "could not populate switch Pokemon template")
-			log.Errorf(ctx, "%s", err)
-			return false
-		}
-		err = regularSlackRequest(client, t.lastContactURL, string(templData.Bytes()))
-		if err != nil {
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending a switch Pokemon template: %s", err)
 			return false
 		}
 
@@ -210,7 +212,7 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 
 			// Switch Pokemon
 			if !runPlayerSwitch(p1, p1BI) || !runPlayerSwitch(p2, p2BI) {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 		case pkmn.MoveBattleActionType:
 			// Player 1 is switching and player 2 is using a move. Player 1
@@ -218,23 +220,23 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 
 			// Switch Pokemon
 			if !runPlayerSwitch(p1, p1BI) {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 
 			// Load the Pokemon battle info now that the switch is complete
 			p1PkmnBI, success = loadPokemonBI(p1Pkmn)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 			p2PkmnBI, success = loadPokemonBI(p2Pkmn)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 
 			// Run the move
 			_, success = runPlayerMove(p2, p2BI, p1, p2Pkmn, p1Pkmn, p2PkmnBI, p1PkmnBI, p2PkmnMove)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 		}
 	case pkmn.MoveBattleActionType:
@@ -246,23 +248,23 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 
 			// Switch Pokemon
 			if !runPlayerSwitch(p2, p2BI) {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 
 			// Load the Pokemon battle info now that the switch is complete
 			p1PkmnBI, success = loadPokemonBI(p1Pkmn)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 			p2PkmnBI, success = loadPokemonBI(p2Pkmn)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 
 			// Run the move
 			_, success = runPlayerMove(p1, p1BI, p2, p1Pkmn, p2Pkmn, p1PkmnBI, p2PkmnBI, p1PkmnMove)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 		case pkmn.MoveBattleActionType:
 			// Player 1 and player 2 are both using moves. We have to consult
@@ -272,11 +274,11 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 			// Load the Pokemon battle info
 			p1PkmnBI, success = loadPokemonBI(p1Pkmn)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 			p2PkmnBI, success = loadPokemonBI(p2Pkmn)
 			if !success {
-				return nil, nil, false
+				return nil, nil, false, false
 			}
 
 			// Figure out who goes first
@@ -289,36 +291,122 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 				// Player 1 will move first
 				runNextMove, success := runPlayerMove(p1, p1BI, p2, p1Pkmn, p2Pkmn, p1PkmnBI, p2PkmnBI, p1PkmnMove)
 				if !success {
-					return nil, nil, false
+					return nil, nil, false, false
 				}
 				if runNextMove {
 					_, success = runPlayerMove(p2, p2BI, p1, p2Pkmn, p1Pkmn, p2PkmnBI, p1PkmnBI, p2PkmnMove)
 					if !success {
-						return nil, nil, false
+						return nil, nil, false, false
 					}
 				}
 			case 2:
 				// Player 2 will move first
 				runNextMove, success := runPlayerMove(p2, p2BI, p1, p2Pkmn, p1Pkmn, p2PkmnBI, p1PkmnBI, p2PkmnMove)
 				if !success {
-					return nil, nil, false
+					return nil, nil, false, false
 				}
 				if runNextMove {
 					_, success = runPlayerMove(p1, p1BI, p2, p1Pkmn, p2Pkmn, p1PkmnBI, p2PkmnBI, p1PkmnMove)
 					if !success {
-						return nil, nil, false
+						return nil, nil, false, false
 					}
 				}
 			}
 		}
 	}
 
-	//
+	// Checks if the given trainer has no more Pokemon able to fight. The first
+	// return value is true if the player has lost. The second return value is
+	// false if this check failed in some way. This function handles errors
+	// properly on its own, so the caller should treat this value as an
+	// indicator to abort the current operation.
+	checkIfPlayerLost := func(t trainerData, opponent trainerData) (bool, bool) {
+		// Get the trainer's party
+		party, _, err := loadParty(ctx, db, log, client, t.lastContactURL, true,
+			"failed to load party members",
+			t.Trainer)
+
+		for _, member := range party {
+			// Load the party member's battle info
+			pkmnBI, _, err := loadPokemonBattleInfo(ctx, db, log, client, t.lastContactURL, true,
+				"failed to load Pokemon battle info",
+				b, member.GetPokemon().UUID)
+			if err != nil {
+				return false, false
+			}
+
+			// Check if the Pokemon is still able to fight
+			if pkmnBI.GetPokemonBattleInfo().CurrHP > 0 {
+				// There's one Pokemon in the party still able to fight, so the
+				// trainer has not lost yet
+				return false, true
+			}
+		}
+
+		// The trainer has lost. Let the world know.
+		templInfo := struct {
+			LostTrainer string
+			WonTrainer  string
+		}{
+			LostTrainer: t.GetTrainer().Name,
+			WonTrainer:  opponent.GetTrainer().Name}
+		err = regularSlackTemplRequest(client, t.lastContactURL, trainerLostTemplate, templInfo)
+		if err != nil {
+			regularSlackRequest(client, t.lastContactURL, "could not populate trainer lost template")
+			log.Infof(ctx, "while sending trainer lost template: %s", err)
+			return false, false
+		}
+
+		return true, true
+	}
+
+	// Check if a player has lost the battle.
+	// TODO(velovix): Add an intelligent response to when two players lose at
+	// the same time.
+	battleOver := false
+	var lostTrainerName, wonTrainerName string
+	if p1PkmnBI.GetPokemonBattleInfo().CurrHP <= 0 {
+		_, success := checkIfPlayerLost(p1, p2)
+		if !success {
+			return nil, nil, false, false
+		}
+		lostTrainerName = p1.GetTrainer().Name
+		wonTrainerName = p2.GetTrainer().Name
+		battleOver = true
+	} else if p2PkmnBI.GetPokemonBattleInfo().CurrHP <= 0 {
+		_, success := checkIfPlayerLost(p2, p1)
+		if !success {
+			return nil, nil, false, false
+		}
+		battleOver = true
+		lostTrainerName = p2.GetTrainer().Name
+		wonTrainerName = p1.GetTrainer().Name
+	}
+
+	if battleOver {
+		// Put the trainers back in waiting mode
+		p1.GetTrainer().Mode = pkmn.WaitingTrainerMode
+		p2.GetTrainer().Mode = pkmn.WaitingTrainerMode
+
+		// Send a notification that the battle is over
+		trainerLostTemplInfo := struct {
+			LostTrainer string
+			WonTrainer  string
+		}{
+			LostTrainer: lostTrainerName,
+			WonTrainer:  wonTrainerName}
+		err = publicSlackTemplRequest(client, p1.lastContactURL, trainerLostTemplate, trainerLostTemplInfo)
+		if err != nil {
+			regularSlackRequest(client, p1.lastContactURL, "failed to parse trainer lost template")
+			log.Errorf(ctx, "while sending trainer lost template: %s", err)
+			return nil, nil, false, false
+		}
+	}
 
 	p1BI.GetTrainerBattleInfo().FinishedTurn = false
 	p2BI.GetTrainerBattleInfo().FinishedTurn = false
 
-	return p1PkmnBI, p2PkmnBI, true
+	return p1PkmnBI, p2PkmnBI, battleOver, true
 }
 
 // fisherYates creates a slice of [from, to] and shuffles it using the
@@ -402,23 +490,19 @@ func sendActionOptions(ctx context.Context, db database.Database, log logging.Lo
 		CurrPokemonName: currPkmn.GetPokemon().Name,
 		MoveTable:       mlt,
 		PartyTable:      pmlt}
-	templData := &bytes.Buffer{}
-
-	err = actionOptionsTemplate.Execute(templData, templInfo)
+	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, actionOptionsTemplate, templInfo)
 	if err != nil {
 		return err
 	}
 
-	err = regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-	if err == nil {
-		err = db.SaveMoveLookupTable(ctx, db.NewMoveLookupTable(mlt), b)
-		if err != nil {
-			return err
-		}
-		err = db.SavePartyMemberLookupTable(ctx, db.NewPartyMemberLookupTable(pmlt), b)
-		if err != nil {
-			return err
-		}
+	// Save data if all went well
+	err = db.SaveMoveLookupTable(ctx, db.NewMoveLookupTable(mlt), b)
+	if err != nil {
+		return err
+	}
+	err = db.SavePartyMemberLookupTable(ctx, db.NewPartyMemberLookupTable(pmlt), b)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -447,34 +531,30 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 	if !found {
 		// Construct the template notifying the trainer that the opponent
 		// doesn't exist
-		templData := &bytes.Buffer{}
-		err := noSuchTrainerExistsTemplate.Execute(templData, opponentName)
+		err := regularSlackTemplRequest(client, currTrainer.lastContactURL, noSuchTrainerExistsTemplate, opponentName)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate no such trainer exists template")
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending a no such trainer exists template: %s", err)
 			return
 		}
-		regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
 		return
 	}
 
 	// Check if the opponent is already waiting on trainer to join a battle
-	b, found, err := db.LoadBattle(ctx, opponentName, currTrainer.GetTrainer().Name)
+	b, found, err := loadBattle(ctx, db, log, client, currTrainer.lastContactURL, false,
+		"could not check for a waiting battle",
+		opponentName, currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not check for a waiting battle")
-		log.Errorf(ctx, "%s", err)
-		return
+		return // Abort operation
 	}
 	var p1BattleInfo database.TrainerBattleInfo
 	var p2BattleInfo database.TrainerBattleInfo
 
 	currTrainer.GetTrainer().Mode = pkmn.BattlingTrainerMode
 
-	templData := &bytes.Buffer{}
-
 	// Battle info for every trainer's Pokemon. This will only get filled if
 	// a battle is starting
-	pkmnBattleInfos := make([]pkmn.PokemonBattleInfo, 0)
+	var pkmnBattleInfos []pkmn.PokemonBattleInfo
 
 	if found {
 		// We will join an existing battle
@@ -482,27 +562,17 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		log.Infof(ctx, "joining an existing battle: %+v", b)
 
 		// Load the player battle info
-		p1BattleInfo, found, err = db.LoadTrainerBattleInfo(ctx, b, b.GetBattle().P1)
+		p1BattleInfo, _, err = loadTrainerBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, true,
+			"could not load player 1 battle info",
+			b, b.GetBattle().P1)
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not load player 1 battle info")
-			log.Errorf(ctx, "%s", err)
-			return
+			return // Abort operation
 		}
-		if !found {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not load player 1 battle info")
-			log.Errorf(ctx, "a trainer is in a battle but has no battle info")
-			return
-		}
-		p2BattleInfo, found, err = db.LoadTrainerBattleInfo(ctx, b, b.GetBattle().P2)
+		p2BattleInfo, _, err = loadTrainerBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, true,
+			"could not load player 2 battle info",
+			b, b.GetBattle().P2)
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not load player 2 battle info")
-			log.Errorf(ctx, "%s", err)
-			return
-		}
-		if !found {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not load player 2 battle info")
-			log.Errorf(ctx, "a trainer is in a battle but has no battle info")
-			return
+			return // Abort operation
 		}
 
 		log.Infof(ctx, "current trainer has %s Pokemon", len(currTrainer.pkmn))
@@ -523,10 +593,10 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		b.GetBattle().Mode = pkmn.StartedBattleMode // Start the battle
 
 		// Notify everyone that a battle has started
-		err := battleStartedTemplate.Execute(templData, b)
+		err = publicSlackTemplRequest(client, currTrainer.lastContactURL, battleStartedTemplate, b)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate battle started template")
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending a battle started template: %s", err)
 			return
 		}
 
@@ -566,7 +636,7 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		log.Infof(ctx, "creating a new battle: %+v", b)
 
 		// Notify everyone that the trainer is waiting for a battle
-		err := waitingForBattleTemplate.Execute(templData, b)
+		err := publicSlackTemplRequest(client, currTrainer.lastContactURL, waitingForBattleTemplate, b)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate waiting for battle template")
 			log.Errorf(ctx, "%s", err)
@@ -574,36 +644,32 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		}
 	}
 
-	err = publicSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-	if err == nil {
-		// Save data if the request was received
-		err = db.SaveBattle(ctx, b)
-		if err != nil {
-			log.Errorf(ctx, "%s", err)
-			return
-		}
-		err = db.SaveTrainerBattleInfo(ctx, b, p1BattleInfo)
-		if err != nil {
-			log.Errorf(ctx, "%s", err)
-		}
-		err = db.SaveTrainerBattleInfo(ctx, b, p2BattleInfo)
-		if err != nil {
-			log.Errorf(ctx, "%s", err)
-		}
-		err = db.SaveTrainer(ctx, currTrainer.Trainer)
-		if err != nil {
-			log.Errorf(ctx, "%s", err)
-			return
-		}
-		for _, pbi := range pkmnBattleInfos {
-			err = db.SavePokemonBattleInfo(ctx, b, db.NewPokemonBattleInfo(pbi))
-			if err != nil {
-				log.Errorf(ctx, "%s", err)
-				return
-			}
-		}
-	} else {
+	// Save data if the request was received
+	err = db.SaveBattle(ctx, b)
+	if err != nil {
 		log.Errorf(ctx, "%s", err)
+		return
+	}
+	log.Infof(ctx, "Type of battle info: %s", reflect.TypeOf(p1BattleInfo))
+	err = db.SaveTrainerBattleInfo(ctx, b, p1BattleInfo)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+	}
+	err = db.SaveTrainerBattleInfo(ctx, b, p2BattleInfo)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+	}
+	err = db.SaveTrainer(ctx, currTrainer.Trainer)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+		return
+	}
+	for _, pbi := range pkmnBattleInfos {
+		err = db.SavePokemonBattleInfo(ctx, b, db.NewPokemonBattleInfo(pbi))
+		if err != nil {
+			log.Errorf(ctx, "%s", err)
+			return
+		}
 	}
 }
 
@@ -615,18 +681,14 @@ func forfeitHandler(ctx context.Context, db database.Database, log logging.Logge
 	currTrainer trainerData) {
 
 	// Load the battle the trainer is in
-	b, found, err := db.LoadBattleTrainerIsIn(ctx, currTrainer.GetTrainer().Name)
+	b, _, err := loadBattleTrainerIsIn(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not load battle info",
+		currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not load battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "trainer is in battle mode but isn't in a battle")
-		log.Errorf(ctx, "trainer is in battle mode but isn't in a battle")
-		return
+		return // Abort operation
 	}
 
+	// Figure out who the opponent is
 	var opponentName string
 	if currTrainer.GetTrainer().Name == b.GetBattle().P1 {
 		opponentName = b.GetBattle().P2
@@ -634,32 +696,29 @@ func forfeitHandler(ctx context.Context, db database.Database, log logging.Logge
 		opponentName = b.GetBattle().P1
 	}
 
-	// Get the trainers out of battle mode
+	// Take the current trainer out of battle mode
 	currTrainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
-
-	templData := &bytes.Buffer{}
 
 	if b.GetBattle().Mode == pkmn.WaitingBattleMode {
 		// The battle hadn't started yet, so nobody loses
 
 		// Construct the template letting everyone know that the trainer
 		// forfeitted
-		err := waitingForfeitTemplate.Execute(templData, b)
+		err := publicSlackTemplRequest(client, currTrainer.lastContactURL, waitingForfeitTemplate, b)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate waiting forfeit template")
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending waiting forfeit template: %s", err)
 			return
-		}
-
-		err = publicSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-		if err == nil {
+		} else {
 			// Save trainers and battle if slack received the request
-			err = db.SaveTrainer(ctx, currTrainer)
+			err = db.SaveTrainer(ctx, currTrainer.Trainer)
 			if err != nil {
 				log.Errorf(ctx, "%s", err)
 				return
 			}
-			err = db.SaveBattle(ctx, b)
+			// The battle is over, so it should be deleted
+			log.Infof(ctx, "deleting a battle %s/%s", b.GetBattle().P1, b.GetBattle().P2)
+			err = db.PurgeBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
 			if err != nil {
 				log.Errorf(ctx, "%s", err)
 				return
@@ -669,16 +728,11 @@ func forfeitHandler(ctx context.Context, db database.Database, log logging.Logge
 		// The battle has started, so the forfeitter will lose
 
 		// Load the opponent
-		opponent, found, err := db.LoadTrainer(ctx, opponentName)
+		opponent, _, err := loadTrainer(ctx, db, log, client, currTrainer.lastContactURL, true,
+			"could not read opponent info",
+			opponentName)
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not read opponent info")
-			log.Errorf(ctx, "%s", err)
-			return
-		}
-		if !found {
-			regularSlackRequest(client, currTrainer.lastContactURL, "opponent does not exist")
-			log.Errorf(ctx, "opponent does not exist")
-			return
+			return // Abort operation
 		}
 
 		// Take the opponent out of battle mode
@@ -688,34 +742,33 @@ func forfeitHandler(ctx context.Context, db database.Database, log logging.Logge
 		currTrainer.GetTrainer().Losses++
 		opponent.GetTrainer().Wins++
 
-		templInfo := struct {
+		battlingForfeitTemplInfo := struct {
 			Forfeitter string
 			Opponent   string
 		}{
 			Forfeitter: currTrainer.GetTrainer().Name,
 			Opponent:   opponent.GetTrainer().Name}
 
-		err = battlingForfeitTemplate.Execute(templData, templInfo)
+		err = publicSlackTemplRequest(client, currTrainer.lastContactURL, battlingForfeitTemplate, battlingForfeitTemplInfo)
 		if err != nil {
 			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate battling forfeit template")
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending battling forfeit template: %s", err)
 			return
-		}
-
-		err = publicSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-		if err == nil {
-			// Save trainers and battle if slack received the request
+		} else {
+			// Save changes if Slack received the request
 			err = db.SaveTrainer(ctx, currTrainer.Trainer)
 			if err != nil {
 				log.Errorf(ctx, "%s", err)
 				return
 			}
-			err = db.SaveTrainer(ctx, opponent)
+			err = db.SaveTrainer(ctx, opponent.Trainer)
 			if err != nil {
 				log.Errorf(ctx, "%s", err)
 				return
 			}
-			err = db.DeleteBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
+			// The battle is over, so it should be deleted
+			log.Infof(ctx, "deleting a battle %s/%s", b.GetBattle().P1, b.GetBattle().P2)
+			err = db.PurgeBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
 			if err != nil {
 				log.Errorf(ctx, "%s", err)
 				return
@@ -733,27 +786,20 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 
 	// Check if the command looks correct
 	if len(r.commandParams) != 1 {
-		templData := &bytes.Buffer{}
-		err := invalidCommandTemplate.Execute(templData, "")
+		err := regularSlackTemplRequest(client, currTrainer.lastContactURL, invalidCommandTemplate, nil)
 		if err != nil {
-			log.Errorf(ctx, "%s", err)
+			log.Errorf(ctx, "while sending an invalid command template: %s", err)
 			return
 		}
-		regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
 		return
 	}
 
 	// Find the battle the player is in
-	b, found, err := db.LoadBattleTrainerIsIn(ctx, currTrainer.GetTrainer().Name)
+	b, _, err := loadBattleTrainerIsIn(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not read battle info",
+		currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not read battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "trainer is in battle mode but isn't in a battle")
-		log.Errorf(ctx, "%s", errors.New("trainer is in battle mode but isn't in a battle"))
-		return
+		return // Abort operation
 	}
 
 	// Figure out the opponent name
@@ -763,16 +809,11 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 	}
 
 	// Load battle info for the trainer
-	trainerBattleInfo, found, err := db.LoadTrainerBattleInfo(ctx, b, currTrainer.GetTrainer().Name)
+	trainerBattleInfo, _, err := loadTrainerBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not get trainer battle info",
+		b, currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get trainer battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get trainer battle info")
-		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but they don't have battle info"))
-		return
+		return // Abort operation
 	}
 
 	// Load trainer info for the opponent
@@ -788,42 +829,31 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 		return
 	}
 	// Load battle info for the opponent
-	opponentBattleInfo, found, err := db.LoadTrainerBattleInfo(ctx, b, opponentName)
+	opponentBattleInfo, _, err := loadTrainerBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not get trainer battle info",
+		b, opponentName)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get trainer battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get trainer battle info")
-		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but their opponent doesn't have battle info"))
-		return
+		return // Abort operation
 	}
 
 	// Extract the move ID from the command
 	scrambledID, err := strconv.Atoi(r.commandParams[0])
 	if err != nil {
-		templData := &bytes.Buffer{}
-		err = invalidCommandTemplate.Execute(templData, "")
+		err = regularSlackTemplRequest(client, currTrainer.lastContactURL, invalidCommandTemplate, nil)
 		if err != nil {
-			log.Errorf(ctx, "%s", err)
+			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate invalid command template")
+			log.Errorf(ctx, "while sending invalid command template: %s", err)
 			return
 		}
-		regularSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
 		return
 	}
 
 	// Get all the move lookup tables
-	mlts, found, err := db.LoadMoveLookupTables(ctx, b)
+	mlts, _, err := loadMoveLookupTables(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not fetch move lookup tables",
+		b)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch move lookup tables")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch move lookup tables")
-		log.Errorf(ctx, "%s", errors.New("battle has no move lookup table"))
-		return
+		return // Abort operation
 	}
 	// Find the trainer's move lookup table
 	var mlt *pkmn.MoveLookupTable
@@ -839,7 +869,7 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but has no move lookup table"))
 		return
 	}
-	moveID := mlts[0].GetMoveLookupTable().Lookup(scrambledID)
+	moveID := mlt.Lookup(scrambledID)
 
 	// Set up the next action to be a move action
 	trainerBattleInfo.GetTrainerBattleInfo().FinishedTurn = true
@@ -847,6 +877,7 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 		Type: pkmn.MoveBattleActionType,
 		Val:  moveID}
 
+	// Get the move information
 	apiMove, err := fetcher.FetchMove(ctx, client, trainerBattleInfo.GetTrainerBattleInfo().NextBattleAction.Val)
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch move information")
@@ -861,39 +892,38 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 	}
 
 	// Send confirmation that the move was received
-	templData := &bytes.Buffer{}
-	err = moveConfirmationTemplate.Execute(templData, move.Name)
+	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, moveConfirmationTemplate, move.Name)
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate move confirmation template")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-
-	err = publicSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-	if err != nil {
-		log.Errorf(ctx, "%s", err)
+		log.Errorf(ctx, "while sending move confirmation template: %s", err)
 		return
 	}
 
 	// Check if both trainers have chosen their move and run the turns if so
 	var p1PkmnBI, p2PkmnBI database.PokemonBattleInfo
-	var success bool
+	var success, battleOver bool
 	if trainerBattleInfo.GetTrainerBattleInfo().FinishedTurn &&
 		opponentBattleInfo.GetTrainerBattleInfo().FinishedTurn {
 
 		if currTrainer.GetTrainer().Name == b.GetBattle().P1 {
 			// If the current trainer is player one
-			p1PkmnBI, p2PkmnBI, success = processTurn(ctx, db, log, client, r, fetcher, currTrainer, opponent, trainerBattleInfo, opponentBattleInfo, b)
+			p1PkmnBI, p2PkmnBI, battleOver, success = processTurn(ctx, db, log, client, r, fetcher, currTrainer, opponent, trainerBattleInfo, opponentBattleInfo, b)
 			if !success {
 				return // Abort operation
 			}
 		} else {
 			// If the current trainer is player two
-			p1PkmnBI, p2PkmnBI, success = processTurn(ctx, db, log, client, r, fetcher, opponent, currTrainer, opponentBattleInfo, trainerBattleInfo, b)
+			p1PkmnBI, p2PkmnBI, battleOver, success = processTurn(ctx, db, log, client, r, fetcher, opponent, currTrainer, opponentBattleInfo, trainerBattleInfo, b)
 			if !success {
 				return // Abort operation
 			}
 		}
+	}
+
+	if battleOver {
+		// Get the trainers out of the battle if it is over
+		currTrainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
+		opponent.GetTrainer().Mode = pkmn.WaitingTrainerMode
 	}
 
 	// Save data if all has gone well
@@ -903,6 +933,21 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 		return
 	}
 	err = db.SaveTrainerBattleInfo(ctx, b, trainerBattleInfo)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+		return
+	}
+	err = db.SaveTrainerBattleInfo(ctx, b, opponentBattleInfo)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+		return
+	}
+	err = db.SaveTrainer(ctx, currTrainer.Trainer)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+		return
+	}
+	err = db.SaveTrainer(ctx, opponent.Trainer)
 	if err != nil {
 		log.Errorf(ctx, "%s", err)
 		return
@@ -921,6 +966,14 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 			return
 		}
 	}
+	if battleOver {
+		// Delete the battle if it has ended
+		err = db.PurgeBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
+		if err != nil {
+			log.Errorf(ctx, "%s", err)
+			return
+		}
+	}
 }
 
 // switchPokemonHandler handles requests to switch Pokemon. This function will
@@ -931,16 +984,11 @@ func switchPokemonHandler(ctx context.Context, db database.Database, log logging
 	currTrainer trainerData) {
 
 	// Find the battle the player is in
-	b, found, err := db.LoadBattleTrainerIsIn(ctx, currTrainer.GetTrainer().Name)
+	b, _, err := loadBattleTrainerIsIn(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not read battle info",
+		currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not read battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "trainer is in battle mode but isn't in a battle")
-		log.Errorf(ctx, "%s", errors.New("trainer is in battle mode but isn't in a battle"))
-		return
+		return // Abort operation
 	}
 
 	// Figure out the opponent's name
@@ -963,28 +1011,18 @@ func switchPokemonHandler(ctx context.Context, db database.Database, log logging
 	}
 
 	// Load battle info for the trainer
-	trainerBattleInfo, found, err := db.LoadTrainerBattleInfo(ctx, b, currTrainer.GetTrainer().Name)
+	trainerBattleInfo, _, err := loadTrainerBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not get trainer battle info",
+		b, currTrainer.GetTrainer().Name)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get trainer battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get trainer battle info")
-		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but they don't have battle info"))
-		return
+		return // Abort operation
 	}
 	// Load battle info for the opponent
-	opponentBattleInfo, found, err := db.LoadTrainerBattleInfo(ctx, b, opponentName)
+	opponentBattleInfo, _, err := loadTrainerBattleInfo(ctx, db, log, client, currTrainer.lastContactURL, true,
+		"could not get opponent battle info",
+		b, opponentName)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get opponent battle info")
-		log.Errorf(ctx, "%s", err)
-		return
-	}
-	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get opponent battle info")
-		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but their opponent doesn't have any battle info"))
-		return
+		return // Abort operation
 	}
 
 	// Set up the next battle action to be a switch Pokemon action
@@ -994,41 +1032,51 @@ func switchPokemonHandler(ctx context.Context, db database.Database, log logging
 		Val:  5}
 
 	// Send confirmation that the switch was received
-	templData := &bytes.Buffer{}
-	err = switchConfirmationTemplate.Execute(templData, "some crap")
+	err = publicSlackTemplRequest(client, currTrainer.lastContactURL, switchConfirmationTemplate, "some crap")
 	if err != nil {
 		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate switch confirmation template")
-		log.Errorf(ctx, "%s", err)
+		log.Errorf(ctx, "while sending switch confirmation template: %s", err)
 		return
-	}
-
-	err = publicSlackRequest(client, currTrainer.lastContactURL, string(templData.Bytes()))
-	if err != nil {
-		log.Errorf(ctx, "%s", err)
 	}
 
 	// Check if both trainers have chosen their move and run the turns if so
 	var p1PkmnBI, p2PkmnBI database.PokemonBattleInfo
-	var success bool
+	var success, battleOver bool
 	if trainerBattleInfo.GetTrainerBattleInfo().FinishedTurn &&
 		opponentBattleInfo.GetTrainerBattleInfo().FinishedTurn {
 
 		if currTrainer.GetTrainer().Name == b.GetBattle().P1 {
 			// If the current trainer is player one
-			p1PkmnBI, p2PkmnBI, success = processTurn(ctx, db, log, client, r, fetcher, currTrainer, opponent, trainerBattleInfo, opponentBattleInfo, b)
+			p1PkmnBI, p2PkmnBI, battleOver, success = processTurn(ctx, db, log, client, r, fetcher, currTrainer, opponent, trainerBattleInfo, opponentBattleInfo, b)
 			if !success {
 				return // Abort operation
 			}
 		} else {
 			// If the current trainer is player two
-			p1PkmnBI, p2PkmnBI, success = processTurn(ctx, db, log, client, r, fetcher, opponent, currTrainer, opponentBattleInfo, trainerBattleInfo, b)
+			p1PkmnBI, p2PkmnBI, battleOver, success = processTurn(ctx, db, log, client, r, fetcher, opponent, currTrainer, opponentBattleInfo, trainerBattleInfo, b)
 			if !success {
 				return // Abort operation
 			}
 		}
 	}
 
+	if battleOver {
+		// Get the trainers out of the battle if it is over
+		currTrainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
+		opponent.GetTrainer().Mode = pkmn.WaitingTrainerMode
+	}
+
 	// Save data if all has gone well
+	err = db.SaveTrainer(ctx, currTrainer.Trainer)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+		return
+	}
+	err = db.SaveTrainer(ctx, opponent.Trainer)
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+		return
+	}
 	err = db.SaveBattle(ctx, b)
 	if err != nil {
 		log.Errorf(ctx, "%s", err)
@@ -1048,6 +1096,13 @@ func switchPokemonHandler(ctx context.Context, db database.Database, log logging
 	}
 	if p2PkmnBI != nil {
 		err = db.SavePokemonBattleInfo(ctx, b, p2PkmnBI)
+		if err != nil {
+			log.Errorf(ctx, "%s", err)
+			return
+		}
+	}
+	if battleOver {
+		err = db.PurgeBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
 		if err != nil {
 			log.Errorf(ctx, "%s", err)
 			return
