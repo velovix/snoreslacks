@@ -27,6 +27,9 @@ type Pokemon struct {
 			URL  string `json:"url"`
 		} `json:"type"`
 	} `json:"types"`
+	Sprites struct {
+		FrontDefault string `json:"front_default"`
+	} `json:"sprites"`
 	Stats []struct {
 		BaseStat int `json:"base_stat"`
 		Effort   int `json:"effort"`
@@ -114,6 +117,9 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 			return pkmn.Pokemon{}, errors.New("PokeAPI set a type as slot " + strconv.Itoa(val.Slot) + ", which is invalid")
 		}
 	}
+
+	// Fill in the sprite info
+	p.SpriteURL = apiPkmn.Sprites.FrontDefault
 
 	// Fill in the stat values
 	for _, val := range apiPkmn.Stats {

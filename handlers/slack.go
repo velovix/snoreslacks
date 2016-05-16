@@ -9,6 +9,32 @@ import (
 	"strings"
 )
 
+type msgType int
+
+const (
+	infoMsgType msgType = iota
+	errorMsgType
+	goodMsgType
+	importantMsgType
+)
+
+// colorFromMsgType converts a message type to an appropriate color value that
+// Slack understands.
+func colorFromMsgType(t msgType) string {
+	switch t {
+	case infoMsgType:
+		return ""
+	case errorMsgType:
+		return "danger"
+	case goodMsgType:
+		return "good"
+	case importantMsgType:
+		return "warning"
+	default:
+		panic("unsupported message type")
+	}
+}
+
 // slackRequest is the information gathered from a Slack slash request.
 type slackRequest struct {
 	token         string
@@ -74,6 +100,7 @@ type attachmentJSON struct {
 	Text       string   `json:"text"`
 	Color      string   `json:"color"`
 	MarkdownIn []string `json:"mrkdwn_in"`
+	ThumbURL   string   `json:"thumb_url"`
 }
 
 // slackDataJSON is JSON data for a standard slack request or response.
@@ -83,18 +110,45 @@ type slackDataJSON struct {
 	Attachments  []attachmentJSON `json:"attachments"`
 }
 
-// regularSlackRequest sends a Slack request to the given URL with standard
-// markdown-formatted data based on the given message. The message will only be
-// seen by the user.
-func regularSlackRequest(client *http.Client, url string, message string) error {
+// message contains information on a message to be sent to Slack.
+type message struct {
+	public bool
+	t      msgType
+	image  string
+	text   string
+}
+
+// templMessage contains information on a message to be sent to Slack using
+// a template.
+type templMessage struct {
+	public    bool
+	t         msgType
+	image     string
+	templ     *template.Template
+	templInfo interface{}
+}
+
+// sendMessage sends a Slack request to the given URL based on the given
+// message.
+func sendMessage(client *http.Client, url string, msg message) error {
+	// Find the appropriate publicity value
+	var publicity string
+	if msg.public {
+		publicity = "in_channel"
+	} else {
+		publicity = "ephemeral"
+	}
+
+	// Construct the response
 	reqJSON := slackDataJSON{
 		Markdown:     true,
-		ResponseType: "ephemeral",
+		ResponseType: publicity,
 		Attachments: []attachmentJSON{
 			{
-				Fallback:   message,
-				Text:       message,
-				Color:      "error",
+				ThumbURL:   msg.image,
+				Fallback:   msg.text,
+				Text:       msg.text,
+				Color:      colorFromMsgType(msg.t),
 				MarkdownIn: []string{"text"}}}}
 
 	// Turn the JSON information into formatted data
@@ -107,86 +161,17 @@ func regularSlackRequest(client *http.Client, url string, message string) error 
 	return err
 }
 
-// regularSlackTemplRequest sends a Slack request to the given URL with
-// standard markdown-formatted data using the given template and template info.
-// The message will only be seen by the user.
-func regularSlackTemplRequest(client *http.Client, url string, templ *template.Template, templInfo interface{}) error {
+// sendTemplMessage sends a Slack message based on the given template message.
+func sendTemplMessage(client *http.Client, url string, msg templMessage) error {
 	templData := &bytes.Buffer{}
-	err := templ.Execute(templData, templInfo)
+	err := msg.templ.Execute(templData, msg.templInfo)
 	if err != nil {
 		return err
 	}
 
-	reqJSON := slackDataJSON{
-		Markdown:     true,
-		ResponseType: "ephemeral",
-		Attachments: []attachmentJSON{
-			{
-				Fallback:   string(templData.Bytes()),
-				Text:       string(templData.Bytes()),
-				Color:      "",
-				MarkdownIn: []string{"text"}}}}
-
-	// Turn the JSON information into formatted data
-	postData, err := json.Marshal(reqJSON)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.Post(url, "application/json", bytes.NewBuffer(postData))
-	return err
-}
-
-// publicSlackRequest sends a Slack request to the given URL with standard
-// markdown-formatted data based on the given message. The message will be seen
-// by the whole channel.
-func publicSlackRequest(client *http.Client, url string, message string) error {
-	reqJSON := slackDataJSON{
-		Markdown:     true,
-		ResponseType: "in_channel",
-		Attachments: []attachmentJSON{
-			{
-				Fallback:   message,
-				Text:       message,
-				Color:      "danger",
-				MarkdownIn: []string{"text"}}}}
-
-	// Turn the JSON information into formatted data
-	postData, err := json.Marshal(reqJSON)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.Post(url, "application/json", bytes.NewBuffer(postData))
-	return err
-}
-
-// publicSlackTemplRequest sends a Slack request to the given URL with
-// standard markdown-formatted data using the given template and template info.
-// The message will be seen by the whole channel
-func publicSlackTemplRequest(client *http.Client, url string, templ *template.Template, templInfo interface{}) error {
-	templData := &bytes.Buffer{}
-	err := templ.Execute(templData, templInfo)
-	if err != nil {
-		return err
-	}
-
-	reqJSON := slackDataJSON{
-		Markdown:     true,
-		ResponseType: "in_channel",
-		Attachments: []attachmentJSON{
-			{
-				Fallback:   string(templData.Bytes()),
-				Text:       string(templData.Bytes()),
-				Color:      "",
-				MarkdownIn: []string{"text"}}}}
-
-	// Turn the JSON information into formatted data
-	postData, err := json.Marshal(reqJSON)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.Post(url, "application/json", bytes.NewBuffer(postData))
-	return err
+	return sendMessage(client, url, message{
+		public: msg.public,
+		image:  msg.image,
+		t:      msg.t,
+		text:   string(templData.Bytes())})
 }

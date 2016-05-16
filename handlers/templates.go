@@ -326,6 +326,11 @@ var switchPokemonTemplateText = `
 `
 var switchPokemonTemplate *template.Template
 
+var initialPokemonSendOutTemplateText = `
+{{ .TrainerName }} sent out {{ .PokemonName }}!
+`
+var initialPokemonSendOutTemplate *template.Template
+
 var faintedPokemonUsingMoveTemplateText = `
 A fainted Pokémon cannot use a move. You must switch to a battle-ready Pokémon first.
 `
@@ -359,6 +364,7 @@ func init() {
 	actionOptionsTemplate = template.Must(template.New("").Parse(actionOptionsTemplateText))
 	moveReportTemplate = template.Must(template.New("").Parse(moveReportTemplateText))
 	switchPokemonTemplate = template.Must(template.New("").Parse(switchPokemonTemplateText))
+	initialPokemonSendOutTemplate = template.Must(template.New("").Parse(initialPokemonSendOutTemplateText))
 	faintedPokemonUsingMoveTemplate = template.Must(template.New("").Parse(faintedPokemonUsingMoveTemplateText))
 	trainerLostTemplate = template.Must(template.New("").Parse(trainerLostTemplateText))
 }

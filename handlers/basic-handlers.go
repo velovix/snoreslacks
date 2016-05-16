@@ -95,12 +95,18 @@ func viewPartyHandler(ctx context.Context, db database.Database, log logging.Log
 
 	// Send the template
 	if inBattle {
-		err = regularSlackTemplRequest(client, currTrainer.lastContactURL, viewPartyInBattleTemplate, viewPartyTemplateInfo)
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     viewPartyInBattleTemplate,
+			templInfo: viewPartyTemplateInfo})
 	} else {
-		err = regularSlackTemplRequest(client, currTrainer.lastContactURL, viewPartyTemplate, viewPartyTemplateInfo)
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     viewPartyTemplate,
+			templInfo: viewPartyTemplateInfo})
 	}
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate view party template")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not populate view party template",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while populating view party template: %s", err)
 		return
 	}

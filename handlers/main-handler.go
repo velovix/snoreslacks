@@ -61,9 +61,13 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		}
 
 		// Send the templated message
-		err = regularSlackTemplRequest(client, r.responseURL, initialResponseTemplate, nil)
+		err = sendTemplMessage(client, r.responseURL, templMessage{
+			templ:     initialResponseTemplate,
+			templInfo: nil})
 		if err != nil {
-			regularSlackRequest(client, r.responseURL, "could not populate initial response template")
+			sendMessage(client, r.responseURL, message{
+				text: "could not populate initial response template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending the initial response template: %s", err)
 			return
 		}
@@ -81,7 +85,9 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		// Some error happened while building a trainerData. This should not happen
 		log.Errorf(ctx, "while building trainer data: %s", err)
-		regularSlackRequest(client, slackReq.responseURL, "could not build trainer data")
+		sendMessage(client, slackReq.responseURL, message{
+			text: "could not build trainer data",
+			t:    errorMsgType})
 	}
 
 	// Set the last known contact URL to the one from this request
@@ -105,7 +111,9 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	err = db.SaveLastContactURL(ctx, currTrainer.Trainer, currTrainer.lastContactURL)
 	if err != nil {
 		// Some error has occurred saving the last contact URL. This should not happen
-		regularSlackRequest(client, slackReq.responseURL, "could not save the last contact URL for trainer '"+slackReq.username+"'")
+		sendMessage(client, slackReq.responseURL, message{
+			text: "could not save the last contact URL for trainer '" + slackReq.username + "'",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", err)
 		return
 	}
@@ -142,12 +150,16 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		// Get the battle the trainer is in
 		b, exists, err := db.LoadBattleTrainerIsIn(ctx, currTrainer.GetTrainer().Name)
 		if err != nil {
-			regularSlackRequest(client, slackReq.responseURL, "could not load the battle the trainer is in")
+			sendMessage(client, slackReq.responseURL, message{
+				text: "could not load the battle the trainer is in",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while trying to find what battle the trainer is in: %s", err)
 			return
 		}
 		if !exists {
-			regularSlackRequest(client, slackReq.responseURL, "trainer is in battling mode, but is not in a battle")
+			sendMessage(client, slackReq.responseURL, message{
+				text: "trainer is in battling mode, but is not in a battle",
+				t:    errorMsgType})
 			log.Errorf(ctx, "trainer is in battling mode, but is not in a battle")
 			return
 		}

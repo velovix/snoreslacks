@@ -3,6 +3,8 @@ package pkmn
 type Pokemon struct {
 	UUID string
 
+	SpriteURL string
+
 	ID     int
 	Name   string
 	Height int

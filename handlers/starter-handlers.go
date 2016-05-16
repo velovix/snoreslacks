@@ -51,7 +51,9 @@ func newTrainerHandler(ctx context.Context, db database.Database, log logging.Lo
 	// Fetch information on the starters
 	starters, err := fetchStarters(ctx, client, fetcher)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch information on starters")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not fetch information on starters",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while fetching starters: %s", err)
 		return
 	}
@@ -64,17 +66,23 @@ func newTrainerHandler(ctx context.Context, db database.Database, log logging.Lo
 		Username: currTrainer.GetTrainer().Name,
 		Starters: starters}
 
-	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, starterMessageTemplate, starterMessageTemplateInfo)
+	err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+		templ:     starterMessageTemplate,
+		templInfo: starterMessageTemplateInfo})
 	if err != nil {
 		// The trainer did not get our response. Abort operation
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate starter message template")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not populate starter message template",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while sending starter message template: %s", err)
 		return
 	} else {
 		// Save the trainer to the database if the Slack request was successful
 		err = db.SaveTrainer(ctx, currTrainer.Trainer)
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not save trainer information",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while saving a new trainer: %s", err)
 			return
 		}
@@ -90,7 +98,9 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 	// Fetch information on the starters
 	starters, err := fetchStarters(ctx, client, fetcher)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch information on starters")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not fetch information on starters",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while fetching starters: %s", err)
 		return
 	}
@@ -105,8 +115,9 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 			if !success {
 				// This contingency should never happen and is a sign of
 				// something seriously wrong
-				regularSlackRequest(client, currTrainer.lastContactURL,
-					"starting trainer already has the maximum amount of Pokemon")
+				sendMessage(client, currTrainer.lastContactURL, message{
+					text: "starting trainer already has the maximum amount of Pokemon",
+					t:    errorMsgType})
 				log.Errorf(ctx, "%s", errors.New("a new trainer already has a full party of Pokemon"))
 				return
 			}
@@ -122,18 +133,26 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 
 		if r.text == "" {
 			// The trainer sent an empty request
-			err = regularSlackTemplRequest(client, currTrainer.lastContactURL, starterInstructionsTemplate, nil)
+			err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+				templ:     starterInstructionsTemplate,
+				templInfo: nil})
 			if err != nil {
-				regularSlackRequest(client, currTrainer.lastContactURL, "could not populate starter instructions template")
+				sendMessage(client, currTrainer.lastContactURL, message{
+					text: "could not populate starter instructions template",
+					t:    errorMsgType})
 				log.Errorf(ctx, "while sending a starter instructions template: %s", err)
 				return
 			}
 		} else {
 			// The trainer requested a starter, but it doesn't exist
 			invalidStarterTemplateInfo := strings.ToLower(r.text)
-			err = regularSlackTemplRequest(client, currTrainer.lastContactURL, invalidStarterTemplate, invalidStarterTemplateInfo)
+			err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+				templ:     invalidStarterTemplate,
+				templInfo: invalidStarterTemplateInfo})
 			if err != nil {
-				regularSlackRequest(client, currTrainer.lastContactURL, "could not populate invalid starter template")
+				sendMessage(client, currTrainer.lastContactURL, message{
+					text: "could not populate invalid starter template",
+					t:    errorMsgType})
 				log.Errorf(ctx, "while sending invalid starter template: %s", err)
 				return
 			}
@@ -152,22 +171,30 @@ func choosingStarterHandler(ctx context.Context, db database.Database, log loggi
 			TrainerName: currTrainer.GetTrainer().Name}
 
 	// Populate the template
-	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, starterPickedTemplate, starterPickedTemplateInfo)
+	err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+		templ:     starterPickedTemplate,
+		templInfo: starterPickedTemplateInfo})
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate starter picked template")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not populate starter picked template",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while sending starter picked template: %s", err)
 		return
 	} else {
 		// Save the trainer and party if Slack received the request
 		err = db.SaveTrainer(ctx, currTrainer.Trainer)
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not save trainer information")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not save trainer information",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while saving trainer information: %s", err)
 			return
 		}
 		err = db.SaveParty(ctx, currTrainer.Trainer, currTrainer.pkmn)
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not save party information")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not save party information",
+				t:    errorMsgType})
 			log.Errorf(ctx, "%s", err)
 		}
 	}

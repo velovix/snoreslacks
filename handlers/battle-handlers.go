@@ -87,7 +87,9 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		// Player 1 is using a move, so we need to load it
 		p1PkmnMove, err = loadMove(p1BI.GetTrainerBattleInfo().NextBattleAction.Val)
 		if err != nil {
-			regularSlackRequest(client, p1.lastContactURL, "could not load move information")
+			sendMessage(client, p1.lastContactURL, message{
+				text: "could not load move information",
+				t:    errorMsgType})
 			log.Errorf(ctx, "%s", err)
 			return nil, nil, false, false
 		}
@@ -96,7 +98,9 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		// Player 2 is using a move, so we need to load it
 		p2PkmnMove, err = loadMove(p2BI.GetTrainerBattleInfo().NextBattleAction.Val)
 		if err != nil {
-			regularSlackRequest(client, p1.lastContactURL, "could not load move information")
+			sendMessage(client, p1.lastContactURL, message{
+				text: "could not load move information",
+				t:    errorMsgType})
 			log.Errorf(ctx, "%s", err)
 			return nil, nil, false, false
 		}
@@ -118,9 +122,13 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 
 		if userPkmnBI.GetPokemonBattleInfo().CurrHP <= 0 {
 			// The trainer tried to have a fainted Pokemon use a move
-			err = regularSlackTemplRequest(client, t.lastContactURL, faintedPokemonUsingMoveTemplate, nil)
+			err = sendTemplMessage(client, t.lastContactURL, templMessage{
+				templ:     faintedPokemonUsingMoveTemplate,
+				templInfo: nil})
 			if err != nil {
-				regularSlackRequest(client, t.lastContactURL, "failed to populate failed Pokemon using move template")
+				sendMessage(client, t.lastContactURL, message{
+					text: "failed to populate failed Pokemon using move template",
+					t:    errorMsgType})
 				log.Errorf(ctx, "while sending a fainted Pokemon using move template: %s", err)
 				return false, false
 			}
@@ -131,7 +139,9 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		mr, err = pkmn.RunMove(userPkmn.GetPokemon(), targetPkmn.GetPokemon(),
 			userPkmnBI.GetPokemonBattleInfo(), targetPkmnBI.GetPokemonBattleInfo(), move)
 		if err != nil {
-			regularSlackRequest(client, t.lastContactURL, "could not run move")
+			sendMessage(client, t.lastContactURL, message{
+				text: "could not run move",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while running a move: %s", err)
 			return false, false
 		}
@@ -153,9 +163,14 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 			TargetTrainerName: opponent.GetTrainer().Name,
 			TargetPokemonName: targetPkmn.GetPokemon().Name,
 			MoveName:          move.Name}
-		err = publicSlackTemplRequest(client, t.lastContactURL, moveReportTemplate, templInfo)
+		err = sendTemplMessage(client, t.lastContactURL, templMessage{
+			templ:     moveReportTemplate,
+			templInfo: templInfo,
+			public:    true})
 		if err != nil {
-			regularSlackRequest(client, t.lastContactURL, "could not populate move report template")
+			sendMessage(client, t.lastContactURL, message{
+				text: "could not populate move report template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending a move report: %s", err)
 			return false, false
 		}
@@ -188,9 +203,13 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 			Switcher:         t.GetTrainer().Name,
 			WithdrawnPokemon: t.pkmn[prevPkmn].GetPokemon().Name,
 			SelectedPokemon:  t.pkmn[newPkmn].GetPokemon().Name}
-		err = regularSlackTemplRequest(client, t.lastContactURL, switchPokemonTemplate, templInfo)
+		err = sendTemplMessage(client, t.lastContactURL, templMessage{
+			templ:     switchPokemonTemplate,
+			templInfo: templInfo})
 		if err != nil {
-			regularSlackRequest(client, t.lastContactURL, "could not populate switch Pokemon template")
+			sendMessage(client, t.lastContactURL, message{
+				text: "could not populate switch Pokemon template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending a switch Pokemon template: %s", err)
 			return false
 		}
@@ -350,9 +369,13 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		}{
 			LostTrainer: t.GetTrainer().Name,
 			WonTrainer:  opponent.GetTrainer().Name}
-		err = regularSlackTemplRequest(client, t.lastContactURL, trainerLostTemplate, templInfo)
+		err = sendTemplMessage(client, t.lastContactURL, templMessage{
+			templ:     trainerLostTemplate,
+			templInfo: templInfo})
 		if err != nil {
-			regularSlackRequest(client, t.lastContactURL, "could not populate trainer lost template")
+			sendMessage(client, t.lastContactURL, message{
+				text: "could not populate trainer lost template",
+				t:    errorMsgType})
 			log.Infof(ctx, "while sending trainer lost template: %s", err)
 			return false, false
 		}
@@ -395,9 +418,15 @@ func processTurn(ctx context.Context, db database.Database, log logging.Logger,
 		}{
 			LostTrainer: lostTrainerName,
 			WonTrainer:  wonTrainerName}
-		err = publicSlackTemplRequest(client, p1.lastContactURL, trainerLostTemplate, trainerLostTemplInfo)
+		err = sendTemplMessage(client, p1.lastContactURL, templMessage{
+			t:         goodMsgType,
+			templ:     trainerLostTemplate,
+			templInfo: trainerLostTemplInfo,
+			public:    true})
 		if err != nil {
-			regularSlackRequest(client, p1.lastContactURL, "failed to parse trainer lost template")
+			sendMessage(client, p1.lastContactURL, message{
+				text: "failed to parse trainer lost template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending trainer lost template: %s", err)
 			return nil, nil, false, false
 		}
@@ -490,7 +519,9 @@ func sendActionOptions(ctx context.Context, db database.Database, log logging.Lo
 		CurrPokemonName: currPkmn.GetPokemon().Name,
 		MoveTable:       mlt,
 		PartyTable:      pmlt}
-	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, actionOptionsTemplate, templInfo)
+	err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+		templ:     actionOptionsTemplate,
+		templInfo: templInfo})
 	if err != nil {
 		return err
 	}
@@ -515,7 +546,9 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 
 	// Check if the command was used correctly
 	if len(r.commandParams) != 1 {
-		regularSlackRequest(client, r.responseURL, "invalid number of parameters in command")
+		sendMessage(client, r.responseURL, message{
+			text: "invalid number of parameters in command",
+			t:    errorMsgType})
 		return
 	}
 
@@ -524,16 +557,22 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 	// Check if the opponent exists
 	opponent, found, err := buildTrainerData(ctx, db, opponentName)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not read oppponent trainer info")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not read oppponent trainer info",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", err)
 		return
 	}
 	if !found {
 		// Construct the template notifying the trainer that the opponent
 		// doesn't exist
-		err := regularSlackTemplRequest(client, currTrainer.lastContactURL, noSuchTrainerExistsTemplate, opponentName)
+		err := sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     noSuchTrainerExistsTemplate,
+			templInfo: opponentName})
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate no such trainer exists template")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not populate no such trainer exists template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending a no such trainer exists template: %s", err)
 			return
 		}
@@ -593,11 +632,46 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		b.GetBattle().Mode = pkmn.StartedBattleMode // Start the battle
 
 		// Notify everyone that a battle has started
-		err = publicSlackTemplRequest(client, currTrainer.lastContactURL, battleStartedTemplate, b)
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     battleStartedTemplate,
+			templInfo: b,
+			public:    true})
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate battle started template")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not populate battle started template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending a battle started template: %s", err)
 			return
+		}
+
+		// Send message about the current trainer's first Pokemon
+		log.Infof(ctx, "about to send a request with the URL: %s", currTrainer.pkmn[0].GetPokemon().SpriteURL)
+		initialPokemonTemplInfo := struct {
+			TrainerName string
+			PokemonName string
+		}{
+			TrainerName: currTrainer.GetTrainer().Name,
+			PokemonName: currTrainer.pkmn[0].GetPokemon().Name}
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			public:    true,
+			image:     currTrainer.pkmn[0].GetPokemon().SpriteURL,
+			templ:     initialPokemonSendOutTemplate,
+			templInfo: initialPokemonTemplInfo})
+		if err != nil {
+			// This request is non-critical, so it's okay if it fails
+			log.Errorf(ctx, "while sending out information on the first starter: %s", err)
+		}
+		// Send message about the opponent trainer's first Pokemon
+		initialPokemonTemplInfo.TrainerName = opponent.GetTrainer().Name
+		initialPokemonTemplInfo.PokemonName = opponent.pkmn[0].GetPokemon().Name
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			public:    true,
+			image:     opponent.pkmn[0].GetPokemon().SpriteURL,
+			templ:     initialPokemonSendOutTemplate,
+			templInfo: initialPokemonTemplInfo})
+		if err != nil {
+			// This request is non-critical, so it's okay if it fails
+			log.Errorf(ctx, "while sending out information on the first starter: %s", err)
 		}
 
 		// Get the battle info of the current trainer
@@ -636,9 +710,15 @@ func challengeHandler(ctx context.Context, db database.Database, log logging.Log
 		log.Infof(ctx, "creating a new battle: %+v", b)
 
 		// Notify everyone that the trainer is waiting for a battle
-		err := publicSlackTemplRequest(client, currTrainer.lastContactURL, waitingForBattleTemplate, b)
+		err := sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			t:         importantMsgType,
+			templ:     waitingForBattleTemplate,
+			templInfo: b,
+			public:    true})
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate waiting for battle template")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not populate waiting for battle template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "%s", err)
 			return
 		}
@@ -704,9 +784,14 @@ func forfeitHandler(ctx context.Context, db database.Database, log logging.Logge
 
 		// Construct the template letting everyone know that the trainer
 		// forfeitted
-		err := publicSlackTemplRequest(client, currTrainer.lastContactURL, waitingForfeitTemplate, b)
+		err := sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     waitingForfeitTemplate,
+			templInfo: b,
+			public:    true})
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate waiting forfeit template")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not populate waiting forfeit template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending waiting forfeit template: %s", err)
 			return
 		} else {
@@ -749,9 +834,15 @@ func forfeitHandler(ctx context.Context, db database.Database, log logging.Logge
 			Forfeitter: currTrainer.GetTrainer().Name,
 			Opponent:   opponent.GetTrainer().Name}
 
-		err = publicSlackTemplRequest(client, currTrainer.lastContactURL, battlingForfeitTemplate, battlingForfeitTemplInfo)
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			t:         goodMsgType,
+			templ:     battlingForfeitTemplate,
+			templInfo: battlingForfeitTemplInfo,
+			public:    true})
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate battling forfeit template")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not populate battling forfeit template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending battling forfeit template: %s", err)
 			return
 		} else {
@@ -786,7 +877,9 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 
 	// Check if the command looks correct
 	if len(r.commandParams) != 1 {
-		err := regularSlackTemplRequest(client, currTrainer.lastContactURL, invalidCommandTemplate, nil)
+		err := sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     invalidCommandTemplate,
+			templInfo: nil})
 		if err != nil {
 			log.Errorf(ctx, "while sending an invalid command template: %s", err)
 			return
@@ -819,12 +912,16 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 	// Load trainer info for the opponent
 	opponent, found, err := buildTrainerData(ctx, db, opponentName)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not build info for opponent")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not build info for opponent",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", err)
 		return
 	}
 	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not build info for opponent")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not build info for opponent",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but their opponent doesn't have trainer info"))
 		return
 	}
@@ -839,9 +936,13 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 	// Extract the move ID from the command
 	scrambledID, err := strconv.Atoi(r.commandParams[0])
 	if err != nil {
-		err = regularSlackTemplRequest(client, currTrainer.lastContactURL, invalidCommandTemplate, nil)
+		err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+			templ:     invalidCommandTemplate,
+			templInfo: nil})
 		if err != nil {
-			regularSlackRequest(client, currTrainer.lastContactURL, "could not populate invalid command template")
+			sendMessage(client, currTrainer.lastContactURL, message{
+				text: "could not populate invalid command template",
+				t:    errorMsgType})
 			log.Errorf(ctx, "while sending invalid command template: %s", err)
 			return
 		}
@@ -865,7 +966,9 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 	}
 	if mlt == nil {
 		// The trainer doesn't have a move lookup table
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch move lookup table")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not fetch move lookup table",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", errors.New("trainer is in a battle but has no move lookup table"))
 		return
 	}
@@ -880,21 +983,29 @@ func useMoveHandler(ctx context.Context, db database.Database, log logging.Logge
 	// Get the move information
 	apiMove, err := fetcher.FetchMove(ctx, client, trainerBattleInfo.GetTrainerBattleInfo().NextBattleAction.Val)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch move information")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not fetch move information",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", err)
 		return
 	}
 	move, err := pokeapi.NewMove(apiMove)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not fetch move information")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not fetch move information",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", err)
 		return
 	}
 
 	// Send confirmation that the move was received
-	err = regularSlackTemplRequest(client, currTrainer.lastContactURL, moveConfirmationTemplate, move.Name)
+	err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+		templ:     moveConfirmationTemplate,
+		templInfo: move.Name})
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate move confirmation template")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not populate move confirmation template",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while sending move confirmation template: %s", err)
 		return
 	}
@@ -1000,12 +1111,16 @@ func switchPokemonHandler(ctx context.Context, db database.Database, log logging
 	// Load the opponent
 	opponent, found, err := buildTrainerData(ctx, db, opponentName)
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get opponent trainer info")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not get opponent trainer info",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", err)
 		return
 	}
 	if !found {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not get opponent data")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not get opponent data",
+			t:    errorMsgType})
 		log.Errorf(ctx, "%s", errors.New("trainer is in a battle with an opponent that doesn't exist"))
 		return
 	}
@@ -1032,9 +1147,14 @@ func switchPokemonHandler(ctx context.Context, db database.Database, log logging
 		Val:  5}
 
 	// Send confirmation that the switch was received
-	err = publicSlackTemplRequest(client, currTrainer.lastContactURL, switchConfirmationTemplate, "some crap")
+	err = sendTemplMessage(client, currTrainer.lastContactURL, templMessage{
+		templ:     switchConfirmationTemplate,
+		templInfo: "some crap",
+		public:    true})
 	if err != nil {
-		regularSlackRequest(client, currTrainer.lastContactURL, "could not populate switch confirmation template")
+		sendMessage(client, currTrainer.lastContactURL, message{
+			text: "could not populate switch confirmation template",
+			t:    errorMsgType})
 		log.Errorf(ctx, "while sending switch confirmation template: %s", err)
 		return
 	}
