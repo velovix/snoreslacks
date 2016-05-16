@@ -128,7 +128,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		// The trainer is in no particular state and is requesting that to change
 
 		switch slackReq.commandName {
-		case "":
+		default:
 			// The user doesn't know what to do
 
 			log.Infof(ctx, "'%s' is looking for a list of commands", slackReq.username)
@@ -168,7 +168,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		case pkmn.WaitingBattleMode:
 			// The trainer is waiting to battle
 			switch slackReq.commandName {
-			case "":
+			default:
 				// The user doesn't know what to do
 
 				log.Infof(ctx, "'%s' is looking for a list of commands while in waiting battle mode", slackReq.username)
@@ -187,7 +187,7 @@ func MainHandler(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		case pkmn.StartedBattleMode:
 			// The trainer is currently battling
 			switch slackReq.commandName {
-			case "":
+			default:
 				// The user doesn't know what to do
 
 				log.Infof(ctx, "'%s' is looking for a list of commands while in started battle mode", slackReq.username)
