@@ -68,11 +68,13 @@ func (h *NewTrainer) runTask(ctx context.Context, s Services) error {
 
 	// Create the data that will go in the starter message template
 	starterMessageTemplateInfo := struct {
-		Username string
-		Starters []pkmn.Pokemon
+		Username     string
+		Starters     []pkmn.Pokemon
+		SlashCommand string
 	}{
-		Username: requester.GetTrainer().Name,
-		Starters: starters}
+		Username:     requester.GetTrainer().Name,
+		Starters:     starters,
+		SlashCommand: slackReq.SlashCommand}
 
 	err = messaging.SendTempl(client, slackReq.ResponseURL, messaging.TemplMessage{
 		Templ:     starterMessageTemplate,

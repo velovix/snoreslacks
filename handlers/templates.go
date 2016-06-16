@@ -19,7 +19,9 @@ var starterMessageTemplateText = `
 Hello there! Welcome to the world of Pokémon! My name is Oak! People call me the Pokémon Professor!
 This world is inhabited by creatures called Pokémon! For some people, Pokémon are pets. Others use them for fights. Myself... I study Pokémon as a profession.
 {{.Username}}! Your very own Pokémon legend is about to unfold! A world of dreams and adventures with Pokémon awaits! Let's go!
-Let's get you a starter Pokémon! Respond with the name of the Pokémon you would like to have to get you started.
+Let's get you a starter Pokémon!
+
+To pick your starter, respond with {{ .SlashCommand }}, followed by the name of the starter you want!
 
 {{ range .Starters }}
 	*{{ .Name }}* (No. {{ .ID }})
