@@ -133,14 +133,6 @@ func (db GAEDatabase) PurgeBattle(ctx context.Context, p1uuid, p2uuid string) er
 	if err != nil {
 		return err
 	}
-	err = db.DeleteMoveLookupTables(ctx, b)
-	if err != nil {
-		return err
-	}
-	err = db.DeletePartyMemberLookupTables(ctx, b)
-	if err != nil {
-		return err
-	}
 	err = db.DeleteBattle(ctx, p1uuid, p2uuid)
 	if err != nil {
 		return err

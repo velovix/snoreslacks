@@ -221,10 +221,10 @@ To select an action, use the "move" or "switch" command along with the ID of you
 *Current Pokémon*: {{ .CurrPokemonName }}
 {{ printf "\u0060\u0060\u0060" -}}
 MOVES
-{{ range .MoveTable.Moves }}  {{ .ID }}: {{ .MoveName }}
+{{ range $id, $moveName := .MoveSlots }}  {{ toBaseOne $id }}: {{ $moveName }}
 {{ end -}}
 PARTY
-{{ range .PartyTable.Members }}  {{ .ID }}: {{ .PkmnName }}
+{{ range $id, $pkmnName := .PartySlots }}  {{ toBaseOne $id }}: {{ $pkmnName }}
 {{ end -}}
 {{ printf "\u0060\u0060\u0060" }}
 `
@@ -367,34 +367,50 @@ But it broke out!
 `
 var pokemonNotCaughtTemplate *template.Template
 
+var invalidMoveSlotTemplateText = `
+Your Pokémon does not have a move in slot {{ . }}!
+`
+var invalidMoveSlotTemplate *template.Template
+
+// toBaseOne converts the given number from base-zero to base-one by adding one
+// to it. This is intended to be used in templates.
+func toBaseOne(i int) int {
+	return i + 1
+}
+
 // Parse all templates.
 func init() {
-	invalidCommandTemplate = template.Must(template.New("").Parse(invalidCommandTemplateText))
-	initialResponseTemplate = template.Must(template.New("").Parse(initialResponseTemplateText))
-	starterMessageTemplate = template.Must(template.New("").Parse(starterMessageTemplateText))
-	starterInstructionsTemplate = template.Must(template.New("").Parse(starterInstructionsTemplateText))
-	invalidStarterTemplate = template.Must(template.New("").Parse(invalidStarterTemplateText))
-	starterPickedTemplate = template.Must(template.New("").Parse(starterPickedTemplateText))
-	viewPartyTemplate = template.Must(template.New("").Parse(viewPartyTemplateText))
-	viewPartyInBattleTemplate = template.Must(template.New("").Parse(viewPartyInBattleTemplateText))
-	waitingHelpTemplate = template.Must(template.New("").Parse(waitingHelpTemplateText))
-	noSuchTrainerExistsTemplate = template.Must(template.New("").Parse(noSuchTrainerExistsTemplateText))
-	battleStartedTemplate = template.Must(template.New("").Parse(battleStartedTemplateText))
-	waitingForBattleTemplate = template.Must(template.New("").Parse(waitingForBattleTemplateText))
-	battleWaitingHelpTemplate = template.Must(template.New("").Parse(battleWaitingHelpTemplateText))
-	waitingForfeitTemplate = template.Must(template.New("").Parse(waitingForfeitTemplateText))
-	battlingForfeitTemplate = template.Must(template.New("").Parse(battlingForfeitTemplateText))
-	battlingHelpTemplate = template.Must(template.New("").Parse(battlingHelpTemplateText))
-	moveConfirmationTemplate = template.Must(template.New("").Parse(moveConfirmationTemplateText))
-	switchConfirmationTemplate = template.Must(template.New("").Parse(switchConfirmationTemplateText))
-	actionOptionsTemplate = template.Must(template.New("").Parse(actionOptionsTemplateText))
-	moveReportTemplate = template.Must(template.New("").Parse(moveReportTemplateText))
-	switchPokemonTemplate = template.Must(template.New("").Parse(switchPokemonTemplateText))
-	initialPokemonSendOutTemplate = template.Must(template.New("").Parse(initialPokemonSendOutTemplateText))
-	faintedPokemonUsingMoveTemplate = template.Must(template.New("").Parse(faintedPokemonUsingMoveTemplateText))
-	trainerLostTemplate = template.Must(template.New("").Parse(trainerLostTemplateText))
-	wildBattleStartedTemplate = template.Must(template.New("").Parse(wildBattleStartedTemplateText))
-	cannotCatchTrainerPokemonTemplate = template.Must(template.New("").Parse(cannotCatchTrainerPokemonTemplateText))
-	pokemonCaughtTemplate = template.Must(template.New("").Parse(pokemonCaughtTemplateText))
-	pokemonNotCaughtTemplate = template.Must(template.New("").Parse(pokemonNotCaughtTemplateText))
+	// Make our standard library of template functions available
+	funcMap := template.FuncMap{
+		"toBaseOne": toBaseOne}
+
+	invalidCommandTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidCommandTemplateText))
+	initialResponseTemplate = template.Must(template.New("").Funcs(funcMap).Parse(initialResponseTemplateText))
+	starterMessageTemplate = template.Must(template.New("").Funcs(funcMap).Parse(starterMessageTemplateText))
+	starterInstructionsTemplate = template.Must(template.New("").Funcs(funcMap).Parse(starterInstructionsTemplateText))
+	invalidStarterTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidStarterTemplateText))
+	starterPickedTemplate = template.Must(template.New("").Funcs(funcMap).Parse(starterPickedTemplateText))
+	viewPartyTemplate = template.Must(template.New("").Funcs(funcMap).Parse(viewPartyTemplateText))
+	viewPartyInBattleTemplate = template.Must(template.New("").Funcs(funcMap).Parse(viewPartyInBattleTemplateText))
+	waitingHelpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(waitingHelpTemplateText))
+	noSuchTrainerExistsTemplate = template.Must(template.New("").Funcs(funcMap).Parse(noSuchTrainerExistsTemplateText))
+	battleStartedTemplate = template.Must(template.New("").Funcs(funcMap).Parse(battleStartedTemplateText))
+	waitingForBattleTemplate = template.Must(template.New("").Funcs(funcMap).Parse(waitingForBattleTemplateText))
+	battleWaitingHelpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(battleWaitingHelpTemplateText))
+	waitingForfeitTemplate = template.Must(template.New("").Funcs(funcMap).Parse(waitingForfeitTemplateText))
+	battlingForfeitTemplate = template.Must(template.New("").Funcs(funcMap).Parse(battlingForfeitTemplateText))
+	battlingHelpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(battlingHelpTemplateText))
+	moveConfirmationTemplate = template.Must(template.New("").Funcs(funcMap).Parse(moveConfirmationTemplateText))
+	switchConfirmationTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchConfirmationTemplateText))
+	actionOptionsTemplate = template.Must(template.New("").Funcs(funcMap).Parse(actionOptionsTemplateText))
+	moveReportTemplate = template.Must(template.New("").Funcs(funcMap).Parse(moveReportTemplateText))
+	switchPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchPokemonTemplateText))
+	initialPokemonSendOutTemplate = template.Must(template.New("").Funcs(funcMap).Parse(initialPokemonSendOutTemplateText))
+	faintedPokemonUsingMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(faintedPokemonUsingMoveTemplateText))
+	trainerLostTemplate = template.Must(template.New("").Funcs(funcMap).Parse(trainerLostTemplateText))
+	wildBattleStartedTemplate = template.Must(template.New("").Funcs(funcMap).Parse(wildBattleStartedTemplateText))
+	cannotCatchTrainerPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(cannotCatchTrainerPokemonTemplateText))
+	pokemonCaughtTemplate = template.Must(template.New("").Funcs(funcMap).Parse(pokemonCaughtTemplateText))
+	pokemonNotCaughtTemplate = template.Must(template.New("").Funcs(funcMap).Parse(pokemonNotCaughtTemplateText))
+	invalidMoveSlotTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidMoveSlotTemplateText))
 }
