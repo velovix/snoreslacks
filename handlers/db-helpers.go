@@ -1,326 +1,200 @@
 package handlers
 
 import (
-	"fmt"
-	"net/http"
-
+	"github.com/pkg/errors"
 	"github.com/velovix/snoreslacks/database"
-	"github.com/velovix/snoreslacks/logging"
+	"github.com/velovix/snoreslacks/messaging"
+	"github.com/velovix/snoreslacks/pkmn"
+	"github.com/velovix/snoreslacks/pokeapi"
 	"golang.org/x/net/context"
 )
 
-// loadTrainer is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadTrainer(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp, name string) (trainerData, bool, error) {
+// loadBasicTrainerData loads some basic information about the trainer. It
+// assumes that all information will be present and errors out if it is not.
+func loadBasicTrainerData(ctx context.Context, db database.Database, uuid string) (basicTrainerData, error) {
+	var td basicTrainerData
+	var err error
 
-	errLog := "while loading a trainer"
-
-	t, found, err := buildTrainerData(ctx, db, name)
+	// Read in the trainer data
+	td.trainer, err = db.LoadTrainer(ctx, uuid)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return trainerData{}, false, err
-	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a trainer with the name '%s' but none exists", name)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return trainerData{}, false, err
-		} else {
-			return trainerData{}, false, nil
-		}
+		return basicTrainerData{}, err
 	}
 
-	return t, true, nil
+	// Load the trainer's party
+	td.pkmn, err = db.LoadParty(ctx, td.trainer)
+	// It's okay if the trainer doesn't have any Pokemon yet
+	if err != nil && !database.IsNoResults(err) {
+		return basicTrainerData{}, err
+	}
+
+	// Load the last contact URL if it exists
+	td.lastContactURL, err = db.LoadLastContactURL(ctx, td.trainer)
+	// it's okay if the trainer doesn't have a last contact URL yet
+	if err != nil && !database.IsNoResults(err) {
+		return basicTrainerData{}, err
+	}
+
+	return td, nil
 }
 
-// loadPokemon is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadPokemon(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp, uuid string) (database.Pokemon, bool, error) {
+// saveBasicTrainerData saves all relevant information contained in the data
+// structure to the database.
+func saveBasicTrainerData(ctx context.Context, db database.Database, btd basicTrainerData) error {
+	// The last contact URL is not saved here because it is saved by the main
+	// handler
 
-	errLog := "while loading a Pokemon"
-
-	b, found, err := db.LoadPokemon(ctx, uuid)
+	// Save the party
+	err := db.SaveParty(ctx, btd.trainer, btd.pkmn)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
-	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a Pokemon with the UUID '%s' but none exists", uuid)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
+		return err
 	}
 
-	return b, true, nil
+	// Save the trainer
+	err = db.SaveTrainer(ctx, btd.trainer)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// loadParty is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadParty(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp string, t database.Trainer) ([]database.Pokemon, bool, error) {
+// loadBattleTrainerData loads battle information on the trainer as well as
+// some basic trainer information, given the battle that this data is in
+// reference to. It assumes all relevant information is available and errors
+// out if this is not the case.
+func loadBattleTrainerData(ctx context.Context, db database.Database, b database.Battle, uuid string) (battleTrainerData, error) {
+	var err error
+	var btd battleTrainerData
 
-	errLog := "while loading a party"
-
-	party, found, err := db.LoadParty(ctx, t)
+	// Load the basic trainer data
+	btd.basicTrainerData, err = loadBasicTrainerData(ctx, db, uuid)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
-	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a party under the trainer '%s' but none exists", t.GetTrainer().Name)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
+		return battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
 	}
 
-	return party, true, nil
+	// Load the trainer's battle info
+	btd.battleInfo, err = db.LoadTrainerBattleInfo(ctx, b, uuid)
+	if err != nil {
+		return battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
+	}
+
+	// Load each Pokemon's battle info
+	for _, pkmn := range btd.pkmn {
+		pbi, err := db.LoadPokemonBattleInfo(ctx, b, pkmn.GetPokemon().UUID)
+		if err != nil {
+			return battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
+		}
+		btd.pkmnBattleInfo = append(btd.pkmnBattleInfo, pbi)
+	}
+
+	return btd, nil
+
 }
 
-// loadMoveLookupTables is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, missing objects
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadMoveLookupTables(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp string, b database.Battle) ([]database.MoveLookupTable, bool, error) {
+// loadBattleData loads the current battle the given trainer is in along with a
+// bunch of other useful information about the battle. It assumes that all
+// information will be present and errors out if it is not.
+func loadBattleData(ctx context.Context, db database.Database, requester basicTrainerData) (battleData, error) {
+	var err error
+	var bd battleData
 
-	errLog := "while loading move lookup tables"
-
-	mlts, found, err := db.LoadMoveLookupTables(ctx, b)
+	// Load the battle the trainer is in
+	bd.battle, err = db.LoadBattleTrainerIsIn(ctx, requester.trainer.GetTrainer().UUID)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
-	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected move lookup tables but none exist")
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
+		return battleData{}, errors.Wrap(err, "loading battle data")
 	}
 
-	return mlts, true, nil
+	// Load the requester information
+	bd.requester, err = loadBattleTrainerData(ctx, db, bd.battle, requester.trainer.GetTrainer().UUID)
+	if err != nil {
+		return battleData{}, errors.Wrap(err, "loading battle data")
+	}
+
+	// Figure out the UUID of the opponent
+	opponentUUID := bd.battle.GetBattle().P1
+	if opponentUUID == requester.trainer.GetTrainer().UUID {
+		opponentUUID = bd.battle.GetBattle().P2
+	}
+	// Load the opponent information
+	bd.opponent, err = loadBattleTrainerData(ctx, db, bd.battle, opponentUUID)
+	if err != nil {
+		return battleData{}, errors.Wrap(err, "loading battle data")
+	}
+
+	return bd, nil
 }
 
-// loadBattle is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadBattle(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp, p1Name, p2Name string) (database.Battle, bool, error) {
+// saveBattleData saves all objects loaded in the battle data.
+func saveBattleData(ctx context.Context, db database.Database, bd battleData) error {
 
-	errLog := "while loading a battle"
-
-	b, found, err := db.LoadBattle(ctx, p1Name, p2Name)
+	// Save the battle
+	err := db.SaveBattle(ctx, bd.battle)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
+		return errors.Wrap(err, "saving battle data")
 	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a battle with the players '%s', '%s' but none exists", p1Name, p2Name)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
+
+	// Save the trainer battle infos
+	err = db.SaveTrainerBattleInfo(ctx, bd.battle, bd.requester.battleInfo)
+	if err != nil {
+		return errors.Wrap(err, "saving battle data")
+	}
+	err = db.SaveTrainerBattleInfo(ctx, bd.battle, bd.opponent.battleInfo)
+	if err != nil {
+		return errors.Wrap(err, "saving battle data")
+	}
+
+	// Save the Pokemon battle infos
+	for _, pkmnBI := range bd.requester.pkmnBattleInfo {
+		err = db.SavePokemonBattleInfo(ctx, bd.battle, pkmnBI)
+		if err != nil {
+			return errors.Wrap(err, "saving battle data")
+		}
+	}
+	for _, pkmnBI := range bd.opponent.pkmnBattleInfo {
+		err = db.SavePokemonBattleInfo(ctx, bd.battle, pkmnBI)
+		if err != nil {
+			return errors.Wrap(err, "saving battle data")
 		}
 	}
 
-	return b, true, nil
+	// Save the Pokemon
+	for _, pkmn := range bd.requester.pkmn {
+		err = db.SavePokemon(ctx, bd.requester.trainer, pkmn)
+		if err != nil {
+			return errors.Wrap(err, "saving battle data")
+		}
+	}
+	for _, pkmn := range bd.opponent.pkmn {
+		err = db.SavePokemon(ctx, bd.opponent.trainer, pkmn)
+		if err != nil {
+			return errors.Wrap(err, "saving battle data")
+		}
+	}
+
+	// Save the trainers
+	err = db.SaveTrainer(ctx, bd.requester.trainer)
+	if err != nil {
+		return errors.Wrap(err, "saving battle data")
+	}
+	err = db.SaveTrainer(ctx, bd.opponent.trainer)
+	if err != nil {
+		return errors.Wrap(err, "saving battle data")
+	}
+	return nil
 }
 
-// loadBattleTrainerIsIn is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadBattleTrainerIsIn(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp, tName string) (database.Battle, bool, error) {
-
-	errLog := "while loading a battle a trainer is in"
-
-	b, found, err := db.LoadBattleTrainerIsIn(ctx, tName)
+// loadMove fetches the move info from PokeAPI and returns a move object.
+func loadMove(ctx context.Context, client messaging.Client, fetcher pokeapi.Fetcher, id int) (pkmn.Move, error) {
+	// Load the move from PokeAPI
+	apiMove, err := fetcher.FetchMove(ctx, client, id)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
+		return pkmn.Move{}, errors.Wrap(err, "loading a move")
 	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a battle that trainer '%s' is in but none exists", tName)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
-	}
-
-	return b, true, nil
-}
-
-// loadPartyMemberLookupTables is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadPartyMemberLookupTables(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp string, b database.Battle) ([]database.PartyMemberLookupTable, bool, error) {
-
-	errLog := "while loading party member lookup tables"
-
-	pmlt, found, err := db.LoadPartyMemberLookupTables(ctx, b)
+	// Use the PokeAPI data to create a pkmn.Move
+	move, err := pokeapi.NewMove(apiMove)
 	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
+		return pkmn.Move{}, errors.Wrap(err, "loading a move")
 	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected party member lookup tables but none exists")
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
-	}
-
-	return pmlt, true, nil
-}
-
-// loadTrainerBattleInfo is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadTrainerBattleInfo(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp string, b database.Battle, tName string) (database.TrainerBattleInfo, bool, error) {
-
-	errLog := "while loading trainer battle info"
-
-	tbi, found, err := db.LoadTrainerBattleInfo(ctx, b, tName)
-	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
-	}
-	if !found {
-		if required {
-			log.Infof(ctx, "The thing wasn't found but is required")
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a trainer battle info for a trainer named '%s' but none exists", tName)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
-	}
-
-	return tbi, true, nil
-}
-
-// loadPokemonBattleInfo is a helper function that does database requests and
-// intelligently reacts to the results. If required is true, a missing object
-// will result in an error and the second return value can be safely ignored.
-// This function will make a regular slack response to the user if an error
-// occurs with the given data and log the error with the given information.
-func loadPokemonBattleInfo(ctx context.Context, db database.Database, log logging.Logger,
-	client *http.Client, url string, required bool,
-	errResp string, b database.Battle, uuid string) (database.PokemonBattleInfo, bool, error) {
-
-	errLog := "while loading Pokemon battle info"
-
-	pbi, found, err := db.LoadPokemonBattleInfo(ctx, b, uuid)
-	if err != nil {
-		sendMessage(client, url, message{
-			t:    errorMsgType,
-			text: errResp})
-		log.Errorf(ctx, "%s: %s", errLog, err)
-		return nil, false, err
-	}
-	if !found {
-		if required {
-			sendMessage(client, url, message{
-				t:    errorMsgType,
-				text: errResp})
-			err := fmt.Errorf("expected a Pokemon battle info for a Pokemon with the UUID '%s' but none exists", uuid)
-			log.Errorf(ctx, "%s: %s", errLog, err)
-			return nil, false, err
-		} else {
-			return nil, false, nil
-		}
-	}
-
-	return pbi, true, nil
+	return move, nil
 }

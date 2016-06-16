@@ -26,6 +26,8 @@ type Pokemon struct {
 	Move3 int
 	Move4 int
 
+	CatchRate int
+
 	Slot int
 }
 

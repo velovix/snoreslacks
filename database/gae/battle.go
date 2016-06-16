@@ -1,8 +1,7 @@
 package gaedatabase
 
 import (
-	"errors"
-	"fmt"
+	"github.com/pkg/errors"
 
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/pkmn"
@@ -16,9 +15,9 @@ func battleName(b *GAEBattle) string {
 	return b.P1 + "/" + b.P2
 }
 
-// battleNameFromTrainerNames generates the name of a battle that contains
+// battleNameFromTrainerUUIDs generates the name of a battle that contains
 // the two players.
-func battleNameFromTrainerNames(p1, p2 string) string {
+func battleNameFromTrainerUUIDs(p1, p2 string) string {
 	return p1 + "/" + p2
 }
 
@@ -45,85 +44,85 @@ func (db GAEDatabase) SaveBattle(ctx context.Context, dbb database.Battle) error
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	_, err := datastore.Put(ctx, battleKey, b)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving battle")
 	}
 	return nil
 }
 
 // LoadBattle loads a battle from the datastore.
-func (db GAEDatabase) LoadBattle(ctx context.Context, p1Name, p2Name string) (database.Battle, bool, error) {
+func (db GAEDatabase) LoadBattle(ctx context.Context, p1uuid, p2uuid string) (database.Battle, error) {
 	var battle GAEBattle
 
-	battleKey := datastore.NewKey(ctx, "battle", battleNameFromTrainerNames(p1Name, p2Name), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleNameFromTrainerUUIDs(p1uuid, p2uuid), 0, nil)
 
 	err := datastore.Get(ctx, battleKey, &battle)
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
-			return &GAEBattle{}, false, nil
+			return &GAEBattle{}, errors.Wrap(database.ErrNoResults, "loading battle")
 		}
-		return &GAEBattle{}, false, err
+		return &GAEBattle{}, errors.Wrap(err, "loading battle")
 	}
 
-	return &battle, true, nil
+	return &battle, nil
 }
 
 // LoadBattleTrainerIsIn loads a battle that the trainer is participating in,
 // or false as the second value if the trainer is not in any battles.
-func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, pName string) (database.Battle, bool, error) {
+func (db GAEDatabase) LoadBattleTrainerIsIn(ctx context.Context, tuuid string) (database.Battle, error) {
 	var battles []GAEBattle
 
 	// See if there's a Battle where the player is P1
-	_, err := datastore.NewQuery("battle").
-		Filter("P1 =", pName).
+	_, err := datastore.NewQuery(battleKindName).
+		Filter("P1 =", tuuid).
 		GetAll(ctx, &battles)
 	if err != nil {
-		return &GAEBattle{}, false, err
+		return &GAEBattle{}, errors.Wrap(err, "loading battle trainer is in")
 	}
 	if len(battles) == 1 {
 		// The battle is found
-		return &battles[0], true, nil
+		return &battles[0], nil
 	} else if len(battles) > 1 {
 		// The player is in more than one battle at once. This should not happen
-		return &GAEBattle{}, false, errors.New(pName + " appears to be in more than one battle at once")
+		return &GAEBattle{}, errors.New(tuuid + " appears to be in more than one battle at once")
 	}
 
 	// See if there's a Battle where the player is P2
-	_, err = datastore.NewQuery("battle").
-		Filter("P2 =", pName).
+	_, err = datastore.NewQuery(battleKindName).
+		Filter("P2 =", tuuid).
 		GetAll(ctx, &battles)
 	if err != nil {
-		return &GAEBattle{}, false, err
+		return &GAEBattle{}, errors.Wrap(err, "loading battle trainer is in")
 	}
 	if len(battles) == 1 {
 		// The battle is found
-		return &battles[0], true, nil
+		return &battles[0], nil
 	} else if len(battles) > 1 {
 		// The player is in more than one battle at once. This should not happen
-		return &GAEBattle{}, false, errors.New(pName + " appears to be in more than one battle at once")
+		return &GAEBattle{}, errors.New(tuuid + " appears to be in more than one battle at once")
 	}
 
 	// No battle of this type exists
-	return &GAEBattle{}, false, nil
+	return &GAEBattle{}, errors.Wrap(database.ErrNoResults, "loading battle trainer is in")
 }
 
 // DeleteBattle deletes the battle from the datastore
-func (db GAEDatabase) DeleteBattle(ctx context.Context, p1Name, p2Name string) error {
-	battleKey := datastore.NewKey(ctx, "battle", battleNameFromTrainerNames(p1Name, p2Name), 0, nil)
+func (db GAEDatabase) DeleteBattle(ctx context.Context, p1uuid, p2uuid string) error {
+	battleKey := datastore.NewKey(ctx, battleKindName, battleNameFromTrainerUUIDs(p1uuid, p2uuid), 0, nil)
 	return datastore.Delete(ctx, battleKey)
 }
 
 // PurgeBattle deletes the battle from the Datastore and any relating data.
-func (db GAEDatabase) PurgeBattle(ctx context.Context, p1Name, p2Name string) error {
-	b, found, err := db.LoadBattle(ctx, p1Name, p2Name)
+func (db GAEDatabase) PurgeBattle(ctx context.Context, p1uuid, p2uuid string) error {
+	b, err := db.LoadBattle(ctx, p1uuid, p2uuid)
 	if err != nil {
+		if err == database.ErrNoResults {
+			return errors.Errorf("no battle found with player 1: %s player 2: %s", p1uuid, p2uuid)
+		}
 		return err
-	}
-	if !found {
-		return fmt.Errorf("no battle found with player 1: %s player 2: %s", p1Name, p2Name)
 	}
 
 	err = db.DeleteTrainerBattleInfos(ctx, b)
@@ -142,7 +141,7 @@ func (db GAEDatabase) PurgeBattle(ctx context.Context, p1Name, p2Name string) er
 	if err != nil {
 		return err
 	}
-	err = db.DeleteBattle(ctx, p1Name, p2Name)
+	err = db.DeleteBattle(ctx, p1uuid, p2uuid)
 	if err != nil {
 		return err
 	}

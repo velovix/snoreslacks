@@ -8,8 +8,6 @@
 package GAELogging
 
 import (
-	"runtime/debug"
-
 	"github.com/velovix/snoreslacks/logging"
 
 	"golang.org/x/net/context"
@@ -38,13 +36,11 @@ func (l GAELogger) Warningf(ctx context.Context, format string, data ...interfac
 // stack trace.
 func (l GAELogger) Errorf(ctx context.Context, format string, data ...interface{}) {
 	log.Errorf(ctx, format, data...)
-	log.Errorf(ctx, string(debug.Stack())) // Print a stack trace
 }
 
 // Criticalf logs to Google App Engine at the ERROR log level. It also includes
 // a stack trace.
 func (l GAELogger) Criticalf(ctx context.Context, format string, data ...interface{}) {
-	log.Criticalf(ctx, string(debug.Stack())) // Print a stack trace
 	log.Criticalf(ctx, format, data...)
 }
 

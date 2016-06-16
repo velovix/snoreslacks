@@ -9,6 +9,17 @@ package gaedatabase
 
 import "github.com/velovix/snoreslacks/database"
 
+const (
+	pokemonKindName                = "Pokemon"
+	trainerKindName                = "Trainer"
+	battleKindName                 = "Battle"
+	moveLookupTableKindName        = "MoveLookupTable"
+	partyMemberLookupTableKindName = "PartyMemberLookupTable"
+	trainerBattleInfoKindName      = "TrainerBattleInfo"
+	pokemonBattleInfoKindName      = "PokemonBattleInfo"
+	lastContactURLKindName         = "LastContactURL"
+)
+
 // GAEDatabase is the datastore implementation of the database interface.
 type GAEDatabase struct{}
 

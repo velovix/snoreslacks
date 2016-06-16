@@ -1,6 +1,7 @@
 package gaedatabase
 
 import (
+	"github.com/pkg/errors"
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/pkmn"
 	"golang.org/x/net/context"
@@ -54,12 +55,12 @@ func (db GAEDatabase) SaveMoveLookupTable(ctx context.Context, dbmlt database.Mo
 		panic("The given move lookup table is not of the right type for this implementation. Are you using two implementations by misake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
-	mltKey := datastore.NewIncompleteKey(ctx, "move lookup table", battleKey)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
+	mltKey := datastore.NewIncompleteKey(ctx, moveLookupTableKindName, battleKey)
 
 	_, err := datastore.Put(ctx, mltKey, mlt)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving move lookup table")
 	}
 
 	return nil
@@ -68,24 +69,24 @@ func (db GAEDatabase) SaveMoveLookupTable(ctx context.Context, dbmlt database.Mo
 // LoadMoveLookupTables loads all move lookup tables attached to the given
 // battle. If none are found, an empty slice is returned and the second return
 // value is false.
-func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Battle) ([]database.MoveLookupTable, bool, error) {
+func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Battle) ([]database.MoveLookupTable, error) {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	var gaeTables []*GAEMoveLookupTable
 
-	_, err := datastore.NewQuery("move lookup table").
+	_, err := datastore.NewQuery(moveLookupTableKindName).
 		Ancestor(battleKey).
 		GetAll(ctx, &gaeTables)
 	if err != nil {
-		return make([]database.MoveLookupTable, 0), false, err
+		return make([]database.MoveLookupTable, 0), errors.Wrap(err, "querying for move lookup tables")
 	}
 	if len(gaeTables) == 0 {
-		return make([]database.MoveLookupTable, 0), false, nil
+		return make([]database.MoveLookupTable, 0), errors.Wrap(database.ErrNoResults, "loading move lookup tables")
 	}
 
 	tables := make([]database.MoveLookupTable, len(gaeTables))
@@ -93,7 +94,7 @@ func (db GAEDatabase) LoadMoveLookupTables(ctx context.Context, dbb database.Bat
 		tables[i] = val
 	}
 
-	return tables, true, nil
+	return tables, nil
 }
 
 // DeleteMoveLookupTables deletes all move lookup tables under the given battle.
@@ -103,22 +104,22 @@ func (db GAEDatabase) DeleteMoveLookupTables(ctx context.Context, dbb database.B
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	// Find all move lookup tables under this battle
-	keys, err := datastore.NewQuery("move lookup table").
+	keys, err := datastore.NewQuery(moveLookupTableKindName).
 		KeysOnly().
 		Ancestor(battleKey).
 		GetAll(ctx, nil)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "querying for move lookup tables")
 	}
 
 	// Delete all the move lookup tables
 	for _, key := range keys {
 		err = datastore.Delete(ctx, key)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "deleting move lookup tables")
 		}
 	}
 
@@ -137,12 +138,12 @@ func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt dat
 		panic("The given party member lookup table is not of the right type for this implementation. Are you using two implementations by misake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
-	pmltKey := datastore.NewIncompleteKey(ctx, "party member lookup table", battleKey)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
+	pmltKey := datastore.NewIncompleteKey(ctx, partyMemberLookupTableKindName, battleKey)
 
 	_, err := datastore.Put(ctx, pmltKey, pmlt)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving party member lookup table")
 	}
 
 	return nil
@@ -151,27 +152,27 @@ func (db GAEDatabase) SavePartyMemberLookupTable(ctx context.Context, dbpmlt dat
 // LoadPartyMemberLookupTables loads all party member lookup tables attached to
 // the given battle. If none are found, an empty slice is returned and the
 // second return value is false.
-func (db GAEDatabase) LoadPartyMemberLookupTables(ctx context.Context, dbb database.Battle) ([]database.PartyMemberLookupTable, bool, error) {
+func (db GAEDatabase) LoadPartyMemberLookupTables(ctx context.Context, dbb database.Battle) ([]database.PartyMemberLookupTable, error) {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	var tables []database.PartyMemberLookupTable
 
-	_, err := datastore.NewQuery("party member lookup table").
+	_, err := datastore.NewQuery(partyMemberLookupTableKindName).
 		Ancestor(battleKey).
 		GetAll(ctx, &tables)
 	if err != nil {
-		return make([]database.PartyMemberLookupTable, 0), false, err
+		return make([]database.PartyMemberLookupTable, 0), errors.Wrap(err, "querying for party member lookup tables")
 	}
 	if len(tables) == 0 {
-		return tables, false, nil
+		return tables, errors.Wrap(database.ErrNoResults, "loading party member lookup tables")
 	}
 
-	return tables, true, nil
+	return tables, nil
 }
 
 // DeletePartyMemberLookupTables deletes all party member lookup tables under
@@ -182,22 +183,22 @@ func (db GAEDatabase) DeletePartyMemberLookupTables(ctx context.Context, dbb dat
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	// Find all party member lookup tables under this battle
-	keys, err := datastore.NewQuery("party member lookup table").
+	keys, err := datastore.NewQuery(partyMemberLookupTableKindName).
 		KeysOnly().
 		Ancestor(battleKey).
 		GetAll(ctx, nil)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "querying for party member lookup tables")
 	}
 
 	// Delete all the party member lookup tables
 	for _, key := range keys {
 		err = datastore.Delete(ctx, key)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "deleting party member lookup tables")
 		}
 	}
 

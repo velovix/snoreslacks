@@ -1,8 +1,7 @@
 package gaedatabase
 
 import (
-	"log"
-
+	"github.com/pkg/errors"
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/pkmn"
 	"golang.org/x/net/context"
@@ -33,29 +32,71 @@ func (db GAEDatabase) SaveTrainer(ctx context.Context, dbt database.Trainer) err
 	}
 
 	// Save the trainer data
-	trainerKey := datastore.NewKey(ctx, "trainer", t.Name, 0, nil)
+	trainerKey := datastore.NewKey(ctx, trainerKindName, t.UUID, 0, nil)
 	_, err := datastore.Put(ctx, trainerKey, t)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving trainer")
 	}
 
 	return nil
 }
 
 // LoadTrainer Loads a trainer from datastore.
-func (db GAEDatabase) LoadTrainer(ctx context.Context, name string) (database.Trainer, bool, error) {
-	trainerKey := datastore.NewKey(ctx, "trainer", name, 0, nil)
+func (db GAEDatabase) LoadTrainer(ctx context.Context, uuid string) (database.Trainer, error) {
+	trainerKey := datastore.NewKey(ctx, trainerKindName, uuid, 0, nil)
 	var t GAETrainer
 
 	// Load the Trainer
 	err := datastore.Get(ctx, trainerKey, &t)
 	if err == datastore.ErrNoSuchEntity {
-		return &GAETrainer{}, false, nil
+		return &GAETrainer{}, errors.Wrap(database.ErrNoResults, "loading trainer")
 	} else if err != nil {
-		return &GAETrainer{}, false, err
+		return &GAETrainer{}, errors.Wrap(err, "loading trainer")
 	}
 
-	return &t, true, nil
+	return &t, nil
+}
+
+// DeleteTrainer deletes the trainer from the database with the given UUID.
+func (db GAEDatabase) DeleteTrainer(ctx context.Context, uuid string) error {
+	trainerKey := datastore.NewKey(ctx, trainerKindName, uuid, 0, nil)
+
+	err := datastore.Delete(ctx, trainerKey)
+	if err != nil {
+		return errors.Wrap(err, "deleting trainer")
+	}
+
+	return nil
+}
+
+// PurgeTrainer deletes the trainer with the given UUID and all of their
+// Pokemon from the database.
+func (db GAEDatabase) PurgeTrainer(ctx context.Context, uuid string) error {
+	trainerKey := datastore.NewKey(ctx, trainerKindName, uuid, 0, nil)
+
+	// Find and delete all the trainer's Pokemon
+	query := datastore.NewQuery(pokemonKindName).
+		Ancestor(trainerKey)
+	for t := query.Run(ctx); ; {
+		var pkmn database.Pokemon
+		key, err := t.Next(&pkmn)
+		if err == datastore.Done {
+			// All the trainer's Pokemon have been deleted
+			break
+		}
+		if err != nil {
+			return errors.Wrap(err, "deleting party")
+		}
+		datastore.Delete(ctx, key)
+	}
+
+	// Delete the trainer
+	err := datastore.Delete(ctx, trainerKey)
+	if err != nil {
+		return errors.Wrap(err, "deleting trainer")
+	}
+
+	return nil
 }
 
 // SaveLastContactURL saves the given last contact URL as associated with
@@ -66,7 +107,7 @@ func (db GAEDatabase) SaveLastContactURL(ctx context.Context, dbt database.Train
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	urlKey := datastore.NewKey(ctx, "last contact url", t.Name, 0, nil)
+	urlKey := datastore.NewKey(ctx, lastContactURLKindName, t.UUID, 0, nil)
 
 	urlContainer := struct {
 		URL string
@@ -74,8 +115,7 @@ func (db GAEDatabase) SaveLastContactURL(ctx context.Context, dbt database.Train
 
 	_, err := datastore.Put(ctx, urlKey, &urlContainer)
 	if err != nil {
-		log.Printf("Oh no! Error! %s", err)
-		return err
+		return errors.Wrap(err, "saving last contact URL")
 	}
 
 	return nil
@@ -84,13 +124,13 @@ func (db GAEDatabase) SaveLastContactURL(ctx context.Context, dbt database.Train
 // LoadLastContactURL loads the last contact URL associated with the given
 // trainer. The second return value is true if there is a last contact
 // URL associated with this trainer, false otherwise.
-func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Trainer) (string, bool, error) {
+func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Trainer) (string, error) {
 	t, ok := dbt.(*GAETrainer)
 	if !ok {
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	urlKey := datastore.NewKey(ctx, "last contact url", t.Name, 0, nil)
+	urlKey := datastore.NewKey(ctx, lastContactURLKindName, t.UUID, 0, nil)
 
 	var url struct {
 		URL string
@@ -98,10 +138,31 @@ func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Train
 	err := datastore.Get(ctx, urlKey, &url)
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
-			return "", false, nil
+			return "", errors.Wrap(database.ErrNoResults, "loading last contact URL")
 		}
-		return "", false, err
+		return "", errors.Wrap(err, "loading last contact URL")
 	}
 
-	return url.URL, true, nil
+	return url.URL, nil
+}
+
+// LoadUUIDFromHumanTrainerName finds the corresponding UUID for the given
+// name of a human (non-NPC) trainer.
+func (db GAEDatabase) LoadUUIDFromHumanTrainerName(ctx context.Context, name string) (string, error) {
+	var trainers []database.Trainer
+
+	_, err := datastore.NewQuery(trainerKindName).
+		Filter("Name =", name).
+		GetAll(ctx, &trainers)
+	if err != nil {
+		return "", err
+	}
+	if len(trainers) == 0 {
+		return "", errors.Wrap(database.ErrNoResults, "loading UUID from human trainer name")
+	}
+	if len(trainers) > 0 {
+		return "", errors.Errorf("multiple human trainers share the same name '%s'", name)
+	}
+
+	return trainers[0].GetTrainer().Name, nil
 }

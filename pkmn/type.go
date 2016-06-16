@@ -118,7 +118,7 @@ func init() {
 	nameToType[Water.Name] = Water
 	Grass.Name = "grass"
 	nameToType[Grass.Name] = Grass
-	Electricity.Name = "elecricity"
+	Electricity.Name = "electric"
 	nameToType[Electricity.Name] = Electricity
 	Psychic.Name = "psychic"
 	nameToType[Psychic.Name] = Psychic

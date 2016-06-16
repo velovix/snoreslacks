@@ -5,7 +5,7 @@
 package logging
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 
 	"golang.org/x/net/context"
 )

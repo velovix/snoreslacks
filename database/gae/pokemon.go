@@ -1,6 +1,8 @@
 package gaedatabase
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/pkmn"
 	"golang.org/x/net/context"
@@ -34,12 +36,12 @@ func (db GAEDatabase) SavePokemon(ctx context.Context, dbt database.Trainer, dbp
 		panic("The given Pokemon is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	trainerKey := datastore.NewKey(ctx, "trainer", t.Name, 0, nil)
-	pkmnKey := datastore.NewKey(ctx, "pokemon", pkmn.UUID, 0, trainerKey)
+	trainerKey := datastore.NewKey(ctx, trainerKindName, t.Name, 0, nil)
+	pkmnKey := datastore.NewKey(ctx, pokemonKindName, pkmn.UUID, 0, trainerKey)
 
 	_, err := datastore.Put(ctx, pkmnKey, pkmn)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving Pokemon")
 	}
 
 	return nil
@@ -47,21 +49,42 @@ func (db GAEDatabase) SavePokemon(ctx context.Context, dbt database.Trainer, dbp
 
 // LoadPokemon loads a Pokemon with the given UUID. The second return value
 // is true if the Pokemon exists, false otherwise.
-func (db GAEDatabase) LoadPokemon(ctx context.Context, uuid string) (database.Pokemon, bool, error) {
+func (db GAEDatabase) LoadPokemon(ctx context.Context, uuid string) (database.Pokemon, error) {
 	var pkmns []*GAEPokemon
 
-	_, err := datastore.NewQuery("pokemon").
+	_, err := datastore.NewQuery(pokemonKindName).
 		Filter("UUID =", uuid).
 		GetAll(ctx, &pkmns)
 	if err != nil {
-		return &GAEPokemon{}, false, err
+		return &GAEPokemon{}, errors.Wrap(err, "loading Pokemon")
 	}
 
 	if len(pkmns) == 0 {
-		return &GAEPokemon{}, false, nil
+		return &GAEPokemon{}, errors.Wrap(database.ErrNoResults, "loading Pokemon")
 	}
 
-	return pkmns[0], true, nil
+	return pkmns[0], nil
+}
+
+// DeletePokemon deletes a Pokemon with the given UUID.
+func (db GAEDatabase) DeletePokemon(ctx context.Context, uuid string) error {
+	var pkmns []*GAEPokemon
+
+	keys, err := datastore.NewQuery(pokemonKindName).
+		Filter("UUID =", uuid).
+		GetAll(ctx, &pkmns)
+	if err != nil {
+		return errors.Wrap(err, "deleting Pokemon")
+	}
+
+	if len(pkmns) == 0 {
+		return errors.New("no Pokemon with the UUID " + uuid + " found to delete")
+	}
+	if len(pkmns) > 1 {
+		return errors.New("multiple Pokemon with the UUID " + uuid + " found while looking for a Pokemon to delete")
+	}
+
+	return datastore.Delete(ctx, keys[0])
 }
 
 // SaveParty saves a batch of Pokemon as owend by the given trainer.
@@ -90,24 +113,24 @@ func (db GAEDatabase) SaveParty(ctx context.Context, dbt database.Trainer, party
 
 // LoadParty returns all the Pokemon in the given trainer's party. The
 // second return value is true if any Pokemon were found, false otherwise.
-func (db GAEDatabase) LoadParty(ctx context.Context, dbt database.Trainer) ([]database.Pokemon, bool, error) {
+func (db GAEDatabase) LoadParty(ctx context.Context, dbt database.Trainer) ([]database.Pokemon, error) {
 	t, ok := dbt.(*GAETrainer)
 	if !ok {
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	trainerKey := datastore.NewKey(ctx, "trainer", t.Name, 0, nil)
+	trainerKey := datastore.NewKey(ctx, trainerKindName, t.Name, 0, nil)
 
 	var gaeParty []*GAEPokemon
-	_, err := datastore.NewQuery("pokemon").
+	_, err := datastore.NewQuery(pokemonKindName).
 		Ancestor(trainerKey).
 		GetAll(ctx, &gaeParty)
 	if err != nil {
-		return make([]database.Pokemon, 0), false, err
+		return make([]database.Pokemon, 0), errors.Wrap(err, "querying for Pokemon")
 	}
 
 	if len(gaeParty) == 0 {
-		return make([]database.Pokemon, 0), false, nil
+		return make([]database.Pokemon, 0), errors.Wrap(database.ErrNoResults, "loading party")
 	}
 
 	// Create the interface representation of the party
@@ -116,5 +139,5 @@ func (db GAEDatabase) LoadParty(ctx context.Context, dbt database.Trainer) ([]da
 		party[i] = val
 	}
 
-	return party, true, nil
+	return party, nil
 }

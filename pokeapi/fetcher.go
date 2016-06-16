@@ -1,8 +1,9 @@
 package pokeapi
 
 import (
-	"errors"
-	"net/http"
+	"github.com/pkg/errors"
+
+	"github.com/velovix/snoreslacks/messaging"
 
 	"golang.org/x/net/context"
 )
@@ -11,8 +12,9 @@ import (
 // The object should implement some kind of caching. Users should expect that
 // any method call may take any amount of time and may fail.
 type Fetcher interface {
-	FetchPokemon(ctx context.Context, client *http.Client, id int) (Pokemon, error)
-	FetchMove(ctx context.Context, client *http.Client, id int) (Move, error)
+	FetchPokemon(ctx context.Context, client messaging.Client, id int) (Pokemon, error)
+	FetchMove(ctx context.Context, client messaging.Client, id int) (Move, error)
+	FetchPokemonSpecies(ctx context.Context, client messaging.Client, id int) (PokemonSpecies, error)
 }
 
 var registered map[string]Fetcher

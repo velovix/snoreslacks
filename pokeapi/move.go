@@ -2,11 +2,12 @@ package pokeapi
 
 import (
 	"encoding/json"
-	"errors"
 	"io/ioutil"
-	"net/http"
 	"strconv"
 
+	"github.com/pkg/errors"
+
+	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"
 )
 
@@ -62,25 +63,25 @@ type Move struct {
 
 // FetchMove queries PokeAPI directly for the move with the given id. This
 // function should be avoided in favor of using a Fetcher.
-func FetchMove(id int, client *http.Client) (Move, error) {
+func FetchMove(id int, client messaging.Client) (Move, error) {
 	// Query the API
 	resp, err := client.Get(apiURL + moveEP + strconv.Itoa(id) + "/")
 	if err != nil {
-		return Move{}, err
+		return Move{}, errors.Wrap(err, "fetching a move")
 	}
 	defer resp.Body.Close()
 
 	// Read the response data
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return Move{}, err
+		return Move{}, errors.Wrap(err, "reading move data")
 	}
 
 	// Unmarshal the response into a Move object
 	var p Move
 	err = json.Unmarshal(data, &p)
 	if err != nil {
-		return Move{}, err
+		return Move{}, errors.Wrap(err, "parsing move data")
 	}
 
 	return p, nil
@@ -88,25 +89,25 @@ func FetchMove(id int, client *http.Client) (Move, error) {
 
 // FetchMoveFromURL queries the given URL for a move and returns the result.
 // This function should be avoided in favor of using a Fetcher.
-func FetchMoveFromURL(url string, client *http.Client) (Move, error) {
+func FetchMoveFromURL(url string, client messaging.Client) (Move, error) {
 	// Query the API
 	resp, err := client.Get(url)
 	if err != nil {
-		return Move{}, err
+		return Move{}, errors.Wrap(err, "fetching a move")
 	}
 	defer resp.Body.Close()
 
 	// Read the response data
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return Move{}, err
+		return Move{}, errors.Wrap(err, "reading move data")
 	}
 
 	// Unmarshal the response into a Move object
 	var p Move
 	err = json.Unmarshal(data, &p)
 	if err != nil {
-		return Move{}, err
+		return Move{}, errors.Wrap(err, "parsing move data")
 	}
 
 	return p, nil

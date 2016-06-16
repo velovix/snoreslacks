@@ -2,13 +2,13 @@ package pokeapi
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io/ioutil"
-	"net/http"
 	"strconv"
 
+	"github.com/pkg/errors"
+
 	"github.com/satori/go.uuid"
+	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"
 
 	"golang.org/x/net/context"
@@ -30,6 +30,10 @@ type Pokemon struct {
 	Sprites struct {
 		FrontDefault string `json:"front_default"`
 	} `json:"sprites"`
+	Species struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	} `json:"species"`
 	Stats []struct {
 		BaseStat int `json:"base_stat"`
 		Effort   int `json:"effort"`
@@ -55,7 +59,7 @@ type Pokemon struct {
 // given ID, then interprets the data as a Pokemon structure. It essentially
 // executes FetchPokemonAsBytes and MakePokemonFromBytes as one operation. This
 // function should be avoided in favor of using a Fetcher.
-func FetchPokemon(id int, client *http.Client) (Pokemon, error) {
+func FetchPokemon(id int, client messaging.Client) (Pokemon, error) {
 	// Get the response data
 	data, err := FetchPokemonAsBytes(id, client)
 	if err != nil {
@@ -69,21 +73,19 @@ func FetchPokemon(id int, client *http.Client) (Pokemon, error) {
 // FetchPokemonAsBytes queries the API for the Pokemon data that corresponds to
 // the given ID. It returns the raw bytes of the response, or an error if the
 // request failed.
-func FetchPokemonAsBytes(id int, client *http.Client) ([]byte, error) {
+func FetchPokemonAsBytes(id int, client messaging.Client) ([]byte, error) {
 	// Query the API
 	resp, err := client.Get(apiURL + pokemonEP + strconv.Itoa(id) + "/")
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "fetching a Pokemon")
 	}
 	defer resp.Body.Close()
 
 	// Read the response data
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "reading Pokemon data")
 	}
-
-	fmt.Println("For", id, ":", string(data))
 
 	return data, nil
 }
@@ -94,14 +96,14 @@ func MakePokemonFromBytes(data []byte) (Pokemon, error) {
 	var p Pokemon
 	err := json.Unmarshal(data, &p)
 	if err != nil {
-		return Pokemon{}, err
+		return Pokemon{}, errors.Wrap(err, "parsing Pokemon data")
 	}
 
 	return p, nil
 }
 
 // NewPokemon creates a new Pokemon from the given PokeAPI Pokemon data.
-func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPkmn Pokemon) (pkmn.Pokemon, error) {
+func NewPokemon(ctx context.Context, client messaging.Client, fetcher Fetcher, apiPkmn Pokemon, level int) (pkmn.Pokemon, error) {
 	var p pkmn.Pokemon
 
 	uuid := uuid.NewV4()
@@ -114,7 +116,7 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 	// Fill in the type values
 	for _, val := range apiPkmn.Types {
 		if val.Slot != 1 && val.Slot != 2 {
-			return pkmn.Pokemon{}, errors.New("PokeAPI set a type as slot " + strconv.Itoa(val.Slot) + ", which is invalid")
+			return pkmn.Pokemon{}, errors.New("unsupported type slot " + strconv.Itoa(val.Slot))
 		}
 	}
 
@@ -137,7 +139,7 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 		case "speed":
 			p.Speed = pkmn.Stat{Base: val.BaseStat}
 		default:
-			return pkmn.Pokemon{}, errors.New("PokeAPI returned an unknown stat '" + val.Stat.Name + "'")
+			return pkmn.Pokemon{}, errors.New("unsupported stat '" + val.Stat.Name + "'")
 		}
 	}
 
@@ -148,11 +150,11 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 		} else if t.Slot == 2 {
 			p.Type2 = t.Type.Name
 		} else {
-			return pkmn.Pokemon{}, errors.New("PokeAPI returned an invalid type slot '" + strconv.Itoa(t.Slot) + "'")
+			return pkmn.Pokemon{}, errors.New("unsupported type slot '" + strconv.Itoa(t.Slot) + "'")
 		}
 	}
 
-	p.Level = 5
+	p.Level = level
 
 	// Learn any necessary moves
 	moveIDs := make([]int, 4)
@@ -163,7 +165,7 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 				// Get the move ID from the mvoe information
 				moveID, err := idFromURL(val.Move.URL)
 				if err != nil {
-					return pkmn.Pokemon{}, errors.New("while parsing an ID from a URL: " + err.Error())
+					return pkmn.Pokemon{}, errors.Wrap(err, "parsing an ID from a URL")
 				}
 				// Learn the move
 				moveIDs[currMoveSlot] = moveID
@@ -179,6 +181,17 @@ func NewPokemon(ctx context.Context, client *http.Client, fetcher Fetcher, apiPk
 	p.Move2 = moveIDs[1]
 	p.Move3 = moveIDs[2]
 	p.Move4 = moveIDs[3]
+
+	// Get species information for the catch rate
+	speciesID, err := idFromURL(apiPkmn.Species.URL)
+	if err != nil {
+		return pkmn.Pokemon{}, err
+	}
+	species, err := fetcher.FetchPokemonSpecies(ctx, client, speciesID)
+	if err != nil {
+		return pkmn.Pokemon{}, err
+	}
+	p.CatchRate = species.CaptureRate
 
 	return p, nil
 }

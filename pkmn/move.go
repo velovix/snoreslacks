@@ -1,9 +1,10 @@
 package pkmn
 
 import (
-	"errors"
 	"log"
 	"math/rand"
+
+	"github.com/pkg/errors"
 )
 
 type DamageClass int

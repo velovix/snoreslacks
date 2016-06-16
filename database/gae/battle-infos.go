@@ -1,6 +1,7 @@
 package gaedatabase
 
 import (
+	"github.com/pkg/errors"
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/pkmn"
 	"golang.org/x/net/context"
@@ -54,40 +55,40 @@ func (db GAEDatabase) SaveTrainerBattleInfo(ctx context.Context, dbb database.Ba
 		panic("The given trainer battle info is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
-	tbiKey := datastore.NewKey(ctx, "trainer battle info", tbi.Name, 0, battleKey)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
+	tbiKey := datastore.NewKey(ctx, trainerBattleInfoKindName, tbi.TrainerUUID, 0, battleKey)
 
 	_, err := datastore.Put(ctx, tbiKey, tbi)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving trainer battle info")
 	}
 
 	return nil
 }
 
 // LoadTrainerBattleInfo returns a trainer battle info for the given
-// trainer name. The second return value is true if the battle info exists
+// trainer UUID. The second return value is true if the battle info exists
 // and was retrieved, false otherwise.
-func (db GAEDatabase) LoadTrainerBattleInfo(ctx context.Context, dbb database.Battle, tName string) (database.TrainerBattleInfo, bool, error) {
+func (db GAEDatabase) LoadTrainerBattleInfo(ctx context.Context, dbb database.Battle, uuid string) (database.TrainerBattleInfo, error) {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
-	tbiKey := datastore.NewKey(ctx, "trainer battle info", tName, 0, battleKey)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
+	tbiKey := datastore.NewKey(ctx, trainerBattleInfoKindName, uuid, 0, battleKey)
 
 	var tbi GAETrainerBattleInfo
 	err := datastore.Get(ctx, tbiKey, &tbi)
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
-			return &GAETrainerBattleInfo{}, false, nil
+			return &GAETrainerBattleInfo{}, errors.Wrap(database.ErrNoResults, "loading trainer battle info")
 		}
 
-		return &GAETrainerBattleInfo{}, false, err
+		return &GAETrainerBattleInfo{}, errors.Wrap(err, "loading trainer battle info")
 	}
 
-	return &tbi, true, nil
+	return &tbi, nil
 }
 
 // DeleteTrainerBattleInfos deletes all trainer battle infos under the given
@@ -98,10 +99,10 @@ func (db GAEDatabase) DeleteTrainerBattleInfos(ctx context.Context, dbb database
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	// Find all the trainer battle infos under this battle
-	keys, err := datastore.NewQuery("trainer battle info").
+	keys, err := datastore.NewQuery(trainerBattleInfoKindName).
 		KeysOnly().
 		Ancestor(battleKey).
 		GetAll(ctx, nil)
@@ -131,12 +132,12 @@ func (db GAEDatabase) SavePokemonBattleInfo(ctx context.Context, dbb database.Ba
 		panic("The given Pokemon battle info is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
-	pbiKey := datastore.NewKey(ctx, "pokemon battle info", pbi.PkmnUUID, 0, battleKey)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
+	pbiKey := datastore.NewKey(ctx, pokemonBattleInfoKindName, pbi.PkmnUUID, 0, battleKey)
 
 	_, err := datastore.Put(ctx, pbiKey, pbi)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "saving Pokemon battle info")
 	}
 
 	return nil
@@ -145,25 +146,25 @@ func (db GAEDatabase) SavePokemonBattleInfo(ctx context.Context, dbb database.Ba
 // LoadPokemonBattleInfo returns a Pokemon battle info for the given
 // Pokemon UUID. The second return value is true if the battle info exists
 // and was retrieved, false otherwise.
-func (db GAEDatabase) LoadPokemonBattleInfo(ctx context.Context, dbb database.Battle, uuid string) (database.PokemonBattleInfo, bool, error) {
+func (db GAEDatabase) LoadPokemonBattleInfo(ctx context.Context, dbb database.Battle, uuid string) (database.PokemonBattleInfo, error) {
 	b, ok := dbb.(*GAEBattle)
 	if !ok {
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
-	pbiKey := datastore.NewKey(ctx, "pokemon battle info", uuid, 0, battleKey)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
+	pbiKey := datastore.NewKey(ctx, pokemonBattleInfoKindName, uuid, 0, battleKey)
 
 	var pbi GAEPokemonBattleInfo
 	err := datastore.Get(ctx, pbiKey, &pbi)
 	if err != nil {
 		if err == datastore.ErrNoSuchEntity {
-			return &GAEPokemonBattleInfo{}, false, nil
+			return &GAEPokemonBattleInfo{}, errors.Wrap(database.ErrNoResults, "loading Pokemon battle info")
 		}
-		return &GAEPokemonBattleInfo{}, false, err
+		return &GAEPokemonBattleInfo{}, errors.Wrap(err, "loading Pokemon battle info")
 	}
 
-	return &pbi, true, nil
+	return &pbi, nil
 }
 
 // DeletePokemonBattleInfos deletes all Pokemon battle infos under the given
@@ -174,22 +175,22 @@ func (db GAEDatabase) DeletePokemonBattleInfos(ctx context.Context, dbb database
 		panic("The given battle is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	battleKey := datastore.NewKey(ctx, "battle", battleName(b), 0, nil)
+	battleKey := datastore.NewKey(ctx, battleKindName, battleName(b), 0, nil)
 
 	// Find all the Pokemon battle infos under this battle
-	keys, err := datastore.NewQuery("pokemon battle info").
+	keys, err := datastore.NewQuery(pokemonBattleInfoKindName).
 		KeysOnly().
 		Ancestor(battleKey).
 		GetAll(ctx, nil)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "querying for Pokemon battle infos")
 	}
 
 	// Delete all the pokemon battle infos
 	for _, key := range keys {
 		err = datastore.Delete(ctx, key)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "deleting Pokemon battle info")
 		}
 	}
 

@@ -11,7 +11,7 @@ type MoveLookupElement struct {
 // MoveLookupTable contains a collection of matches between scrambled IDs and
 // move IDs.
 type MoveLookupTable struct {
-	TrainerName string
+	TrainerUUID string
 	Moves       []MoveLookupElement
 }
 
@@ -37,7 +37,7 @@ type PartyMemberLookupElement struct {
 // PartyMemberLookupTable contains a collection of matches between scrambled
 // IDs and party slots.
 type PartyMemberLookupTable struct {
-	TrainerName string
+	TrainerUUID string
 	Members     []PartyMemberLookupElement
 }
 

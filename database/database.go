@@ -1,12 +1,35 @@
+// Package database contains a specification for a database API for
+// Snoreslacks. This includes database object wrappers for each database type
+// and a single monoloithic interface for database actions.
+//
+// Applications should interact with this package directly, not its
+// implementations. Implementations should register themselves with this
+// package.
 package database
 
 import (
-	"errors"
+	goerrors "errors"
+
+	"github.com/pkg/errors"
 
 	"github.com/velovix/snoreslacks/pkmn"
 
 	"golang.org/x/net/context"
 )
+
+// ErrNoResults is returned when a database query that expects an object can't
+// find one, like when a call to LoadTrainer cannot find a trainer with the
+// given UUID.
+var ErrNoResults = goerrors.New("database: no results found")
+
+// IsNoResults returns true if the given error is as a result of there being
+// no results from a query.
+//
+// This can be useful information because, in some circumstances, a missing
+// entry might be a recoverable issue.
+func IsNoResults(err error) bool {
+	return errors.Cause(err) == ErrNoResults
+}
 
 // Pokemon describes a database representation of a Pokemon that can emit a
 // pkmn.Pokemon.
@@ -58,16 +81,25 @@ type Database interface {
 	NewTrainer(t pkmn.Trainer) Trainer
 	// SaveTrainer saves the given Trainer.
 	SaveTrainer(ctx context.Context, t Trainer) error
-	// LoadTrainer returns a Trainer with the given name. The second return
+	// LoadTrainer returns a Trainer with the given UUID. The second return
 	// value is true if the Trainer exists and was retrieved, false otherwise.
-	LoadTrainer(ctx context.Context, name string) (Trainer, bool, error)
+	LoadTrainer(ctx context.Context, uuid string) (Trainer, error)
+	// DeleteTrainer deletes the trainer with the given UUID from the database.
+	DeleteTrainer(ctx context.Context, uuid string) error
+	// PurgeTrainer deletes the trainer with the given UUID and all of their
+	// Pokemon from the database.
+	PurgeTrainer(ctx context.Context, uuid string) error
 	// SaveLastContactURL saves the given last contact URL as associated with
 	// the given trainer.
 	SaveLastContactURL(ctx context.Context, t Trainer, url string) error
 	// LoadLastContactURL loads the last contact URL associated with the given
 	// trainer. The second return value is true if there is a last contact
 	// URL associated with this trainer, false otherwise.
-	LoadLastContactURL(ctx context.Context, t Trainer) (string, bool, error)
+	LoadLastContactURL(ctx context.Context, t Trainer) (string, error)
+	// LoadUUIDFromHumanTrainerName finds the corresponding UUID for the given
+	// name of a human (non-NPC) trainer. The second return value is true if a
+	// trainer with the given name was found.
+	LoadUUIDFromHumanTrainerName(ctx context.Context, name string) (string, error)
 
 	// NewPokemon creates a database Pokemon that is ready to be saved from the
 	// given pkmn.Pokemon.
@@ -76,30 +108,32 @@ type Database interface {
 	SavePokemon(ctx context.Context, t Trainer, pkmn Pokemon) error
 	// LoadPokemon loads a Pokemon with the given UUID. The second return value
 	// is true if the Pokemon exists, false otherwise.
-	LoadPokemon(ctx context.Context, uuid string) (Pokemon, bool, error)
+	LoadPokemon(ctx context.Context, uuid string) (Pokemon, error)
+	// DeletePokemon deletes a Pokemon with the given UUID.
+	DeletePokemon(ctx context.Context, uuid string) error
 	// SaveParty saves a batch of Pokemon as owend by the given trainer.
 	SaveParty(ctx context.Context, t Trainer, party []Pokemon) error
 	// LoadParty returns all the Pokemon in the given trainer's party. The
 	// second return value is true if any Pokemon were found, false otherwise.
-	LoadParty(ctx context.Context, t Trainer) ([]Pokemon, bool, error)
+	LoadParty(ctx context.Context, t Trainer) ([]Pokemon, error)
 
 	// NewBattle creates a database battle that is ready to be saved from the
 	// given pkmn.Battle.
 	NewBattle(b pkmn.Battle) Battle
 	// SaveBattle saves the given battle.
 	SaveBattle(ctx context.Context, b Battle) error
-	// LoadBattle returns a battle that the given Trainer name is involved in.
+	// LoadBattle returns a battle that the given trainer UUID is involved in.
 	// The second return value is true if the battle exists and was retrieved,
 	// false otherwise.
-	LoadBattle(ctx context.Context, p1Name, p2Name string) (Battle, bool, error)
-	// LoadBattleTrainerIsIn returns a battle the given Trainer name is involved
+	LoadBattle(ctx context.Context, p1uuid, p2uuid string) (Battle, error)
+	// LoadBattleTrainerIsIn returns a battle the given trainer UUID is involved
 	// in.
-	LoadBattleTrainerIsIn(ctx context.Context, pName string) (Battle, bool, error)
+	LoadBattleTrainerIsIn(ctx context.Context, tuuid string) (Battle, error)
 	// DeleteTrainer deletes the battle that the two trainers are involved in.
-	DeleteBattle(ctx context.Context, p1Name, p2Name string) error
+	DeleteBattle(ctx context.Context, p1uuid, p2uuid string) error
 	// PurgeBattle deletes the battle that the two trainers are involved in and
 	// purges any relating data having to do with this battle.
-	PurgeBattle(ctx context.Context, p1Name, p2Name string) error
+	PurgeBattle(ctx context.Context, p1uuid, p2uuid string) error
 
 	// NewMoveLookupTable creates a database move lookup table that is ready
 	// to be saved from the given pkmn.MoveLookupTable.
@@ -109,7 +143,7 @@ type Database interface {
 	SaveMoveLookupTable(ctx context.Context, table MoveLookupTable, b Battle) error
 	// LoadMoveLookupTables Loads all the move lookup tables that the given
 	// battle object owns.
-	LoadMoveLookupTables(ctx context.Context, b Battle) ([]MoveLookupTable, bool, error)
+	LoadMoveLookupTables(ctx context.Context, b Battle) ([]MoveLookupTable, error)
 	// DeleteMoveLookupTables deletes all move lookup tables under the given
 	// battle.
 	DeleteMoveLookupTables(ctx context.Context, b Battle) error
@@ -122,7 +156,7 @@ type Database interface {
 	SavePartyMemberLookupTable(ctx context.Context, table PartyMemberLookupTable, b Battle) error
 	// LoadPartyMemberLookupTables Loads all the party member lookup tables
 	// that the given Battle object owns.
-	LoadPartyMemberLookupTables(ctx context.Context, b Battle) ([]PartyMemberLookupTable, bool, error)
+	LoadPartyMemberLookupTables(ctx context.Context, b Battle) ([]PartyMemberLookupTable, error)
 	// DeletePartyMemberLookupTables deletes all party member lookup tables
 	// under the given battle.
 	DeletePartyMemberLookupTables(ctx context.Context, b Battle) error
@@ -134,9 +168,9 @@ type Database interface {
 	// battle that it pertains to.
 	SaveTrainerBattleInfo(ctx context.Context, b Battle, tbi TrainerBattleInfo) error
 	// LoadTrainerBattleInfo returns a trainer battle info for the given
-	// trainer name and battle. The second return value is true if the battle
+	// trainer UUID and battle. The second return value is true if the battle
 	// info exists and was retrieved, false otherwise.
-	LoadTrainerBattleInfo(ctx context.Context, b Battle, tName string) (TrainerBattleInfo, bool, error)
+	LoadTrainerBattleInfo(ctx context.Context, b Battle, tuuid string) (TrainerBattleInfo, error)
 	// DeleteTrainerBattleInfos deletes all trainer battle infos under the
 	// given battle.
 	DeleteTrainerBattleInfos(ctx context.Context, b Battle) error
@@ -150,7 +184,7 @@ type Database interface {
 	// LoadPokemonBattleInfo returns a Pokemon battle info for the given
 	// Pokemon UUID and battle. The second return value is true if the battle
 	// info exists and was retrieved, false otherwise.
-	LoadPokemonBattleInfo(ctx context.Context, b Battle, uuid string) (PokemonBattleInfo, bool, error)
+	LoadPokemonBattleInfo(ctx context.Context, b Battle, uuid string) (PokemonBattleInfo, error)
 	// DeletePokemonBattleInfos deletes all Pokemon battle infos under the
 	// given battle.
 	DeletePokemonBattleInfos(ctx context.Context, b Battle) error

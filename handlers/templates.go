@@ -1,6 +1,6 @@
 package handlers
 
-import "html/template"
+import "text/template"
 
 var invalidCommandTemplateText = `
 Invalid command format.
@@ -40,7 +40,7 @@ var starterPickedTemplateText = `
 So, you want {{ .PkmnName }}! This Pokémon is really energetic!
 {{ .TrainerName }} received a {{ .PkmnName }}!
 
-(You can check out your party with the "party" keyword)
+(You can check out your party with the "{{ .CommandName }} party" command)
 `
 var starterPickedTemplate *template.Template
 
@@ -63,8 +63,6 @@ var invalidStarterTemplate *template.Template
 // View party in battle template. This template will be shown when a trainer
 // wants to view their party.
 var viewPartyInBattleTemplateText = `
-*Your Party*
-
 {{ range . }}
 	*{{ .Name }}* (No. {{ .ID }})
 {{ printf "\u0060\u0060\u0060" -}}
@@ -85,8 +83,6 @@ var viewPartyInBattleTemplate *template.Template
 // View party template. This template will be shown when a trainer wants
 // to view their party.
 var viewPartyTemplateText = `
-*Your Party*
-
 {{ range . }}
 	*{{ .Name }}* (No. {{ .ID }})
 {{ printf "\u0060\u0060\u0060" -}}
@@ -121,11 +117,14 @@ type viewSinglePokemonTemplateInfo struct {
 var waitingHelpTemplateText = `
 You are currently doing nothing in particular.
 
-*party*
+{{ . }} *party*
 View the list of Pokémon you have in your party, including their stats and other useful information.
 
-*battle* _username_
+{{ . }} *battle* _username_
 Request a battle with a trainer that has the given username. The user has to be a trainer. The user can accept by using this command with your username.
+
+{{ . }} *wild*
+Jump into a wild Pokémon encounter! More wild Pokemon become available to you as you progress through the game.
 `
 var waitingHelpTemplate *template.Template
 
@@ -134,10 +133,10 @@ var waitingHelpTemplate *template.Template
 var battleWaitingHelpTemplateText = `
 You are currently waiting for your opponent to accept your challenge.
 
-*party*
+{{ . }} *party*
 View the list of Pokémon you have in your party, including their stats and other useful information.
 
-*forfeit*
+{{ . }} *forfeit*
 Stops waiting for your opponent to accept your challenge. It does not count as a loss so long as you're still waiting.
 `
 var battleWaitingHelpTemplate *template.Template
@@ -145,16 +144,19 @@ var battleWaitingHelpTemplate *template.Template
 var battlingHelpTemplateText = `
 You are currently in a battle.
 
-*party*
+{{ . }} *party*
 View the list of Pokémon you have in your party, including their stats and other useful information.
 
-*use* _id_
+{{ . }} *use* _id_
 Uses the move with the given ID. These IDs are scrambled every turn so that the opponent doesn't know what move you've chosen.
 
-*switch* _slot_
+{{ . }} *switch* _slot_
 Switch to the Pokémon in the given slot, starting at 1.
 
-*forfeit*
+{{ . }} *catch*
+Throws a Pokéball at the Pokemon. Just don't do this to Pokémon that already have an owner!
+
+{{ . }} *forfeit*
 Leave the battle. This counts as a loss for you.
 `
 var battlingHelpTemplate *template.Template
@@ -229,7 +231,7 @@ var actionOptionsTemplate *template.Template
 // Move report template. Contains a full textual representation of a move
 // report, telling trainers what happened when a move was used.
 var moveReportTemplateText = `
-{{ .UserTrainerName }}'s {{ .UserPokemonName }} used {{ .MoveName }}!
+{{ .UserActionPrefix }} {{ .UserPokemonName }} used {{ .MoveName }}!
 {{ if .Missed -}}
 But the attack missed!
 {{ else if .CriticalHit -}}
@@ -245,75 +247,75 @@ The move had no effect...
 {{ else -}}
 {{- end -}}
 {{ if .TargetDamage -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} took {{ .TargetDamage }} damage!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} took {{ .TargetDamage }} damage!
 {{ else -}}
 {{- end -}}
 {{ if .TargetDrain -}}
-{{ .UserTrainerName }}'s {{ .UserPokemonName }} drained {{ .TargetDrain }} HP from {{ .TargetTrainerName }}'s {{ .TargetPokemonName }}!
+{{ .UserActionPrefix }} {{ .UserPokemonName }} drained {{ .TargetDrain }} HP from {{ .TargetActionPrefix }} {{ .TargetPokemonName }}!
 {{ else -}}
 {{- end -}}
 {{ if gt .UserHealing 0 -}}
-{{ .UserTrainerName }}'s {{ .UserPokemonName }} healed {{ .UserHealing }} HP!
+{{ .UserActionPrefix }} {{ .UserPokemonName }} healed {{ .UserHealing }} HP!
 {{ else if lt .UserHealing 0 -}}
-{{ .UserTrainerName }}'s {{ .UserPokemonName }} suffered knockback damage...
+{{ .UserActionPrefix }} {{ .UserPokemonName }} suffered knockback damage...
 {{ else -}}
 {{- end -}}
 {{ if .UserFainted -}}
-{{ .UserTrainerName }}'s {{ .UserPokemonName }} has fainted!
+{{ .UserActionPrefix }} {{ .UserPokemonName }} has fainted!
 {{ else -}}
 {{- end -}}
 {{ if .TargetFainted -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has fainted!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} has fainted!
 {{ else -}}
 {{- end -}}
 {{ if gt .AttStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s attack has increased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s attack has increased!
 {{ else if lt .AttStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s attack has decreased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s attack has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .DefStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s defense has increased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s defense has increased!
 {{ else if lt .DefStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s defense has decreased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s defense has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .SpAttStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special attack has increased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s special attack has increased!
 {{ else if lt .SpAttStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special attack has decreased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s special attack has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .SpDefStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special defense has increased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s special defense has increased!
 {{ else if lt .SpDefStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s special defense has decreased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s special defense has decreased!
 {{ else -}}
 {{- end -}}
 {{ if gt .SpeedStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s speed has increased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s speed has increased!
 {{ else if lt .SpeedStageChange 0 -}}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }}'s speed has decreased!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }}'s speed has decreased!
 {{ else -}}
 {{- end -}}
 {{ if .Poisoned }}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been poisoned!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} has been poisoned!
 {{ else -}}
 {{- end -}}
 {{ if .Paralyzed }}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been paralyzed!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} has been paralyzed!
 {{ else -}}
 {{- end -}}
 {{ if .Asleep }}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has fallen asleep!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} has fallen asleep!
 {{ else -}}
 {{- end -}}
 {{ if .Frozen }}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been frozen!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} has been frozen!
 {{ else -}}
 {{- end -}}
 {{ if .Burned }}
-{{ .TargetTrainerName }}'s {{ .TargetPokemonName }} has been burned!
+{{ .TargetActionPrefix }} {{ .TargetPokemonName }} has been burned!
 {{ else -}}
 {{- end -}}
 {{ printf "\u0060" }}{{ printf "%-15s" .TargetPokemonName }}: {{ .UserHPBar }}{{ printf "\u0060" }}
@@ -341,6 +343,28 @@ var trainerLostTemplateText = `
 `
 var trainerLostTemplate *template.Template
 
+var wildBattleStartedTemplateText = `
+A wild {{ .WildPokemonName }} appeared!
+`
+var wildBattleStartedTemplate *template.Template
+
+var cannotCatchTrainerPokemonTemplateText = `
+The trainer blocked the ball! Don't be a thief!
+`
+var cannotCatchTrainerPokemonTemplate *template.Template
+
+var pokemonCaughtTemplateText = `
+You threw a Pokeball at the wild {{ . }}...
+The wild {{ . }} was caught!
+`
+var pokemonCaughtTemplate *template.Template
+
+var pokemonNotCaughtTemplateText = `
+You threw a Pokeball at the wild {{ . }}...
+But it broke out!
+`
+var pokemonNotCaughtTemplate *template.Template
+
 // Parse all templates.
 func init() {
 	invalidCommandTemplate = template.Must(template.New("").Parse(invalidCommandTemplateText))
@@ -367,4 +391,8 @@ func init() {
 	initialPokemonSendOutTemplate = template.Must(template.New("").Parse(initialPokemonSendOutTemplateText))
 	faintedPokemonUsingMoveTemplate = template.Must(template.New("").Parse(faintedPokemonUsingMoveTemplateText))
 	trainerLostTemplate = template.Must(template.New("").Parse(trainerLostTemplateText))
+	wildBattleStartedTemplate = template.Must(template.New("").Parse(wildBattleStartedTemplateText))
+	cannotCatchTrainerPokemonTemplate = template.Must(template.New("").Parse(cannotCatchTrainerPokemonTemplateText))
+	pokemonCaughtTemplate = template.Must(template.New("").Parse(pokemonCaughtTemplateText))
+	pokemonNotCaughtTemplate = template.Must(template.New("").Parse(pokemonNotCaughtTemplateText))
 }
