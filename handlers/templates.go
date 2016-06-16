@@ -150,10 +150,10 @@ You are currently in a battle.
 View the list of Pokémon you have in your party, including their stats and other useful information.
 
 {{ . }} *use* _id_
-Uses the move with the given ID. These IDs are scrambled every turn so that the opponent doesn't know what move you've chosen.
+Uses the move with the given ID
 
 {{ . }} *switch* _slot_
-Switch to the Pokémon in the given slot, starting at 1.
+Switch to the Pokémon with the given ID.
 
 {{ . }} *catch*
 Throws a Pokéball at the Pokemon. Just don't do this to Pokémon that already have an owner!
@@ -217,7 +217,7 @@ var switchConfirmationTemplate *template.Template
 
 // Action options template. Shows the battle options a trainer has.
 var actionOptionsTemplateText = `
-To select an action, use the "move" or "switch" command along with the ID of your choice. The IDs are scrambled so your opponent can't know what move you'll use.
+To select an action, use the "move" or "switch" command along with the ID of your choice.
 *Current Pokémon*: {{ .CurrPokemonName }}
 {{ printf "\u0060\u0060\u0060" -}}
 MOVES

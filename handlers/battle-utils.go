@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"math/rand"
-
 	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"
@@ -27,23 +25,6 @@ func makeTextHPBar(p *pkmn.Pokemon, pBI *pkmn.PokemonBattleInfo) string {
 	return bar + "]"
 }
 
-// fisherYates creates a slice of [from, to] and shuffles it using the
-// Fisher-Yates algorithm.
-func fisherYates(from, to int) []int {
-	values := make([]int, to-(from-1))
-	for i := range values {
-		values[i] = from + i
-	}
-	for i := len(values) - 1; i >= 1; i-- {
-		n := rand.Intn(i + 1)
-		temp := values[i]
-		values[i] = values[n]
-		values[n] = temp
-	}
-
-	return values
-}
-
 // makeActionOptions makes and sends each player their move and party switching
 // options.
 func makeActionOptions(ctx context.Context, s Services, trainerData basicTrainerData, trainerDataBI database.TrainerBattleInfo, b database.Battle) error {
@@ -59,7 +40,6 @@ func makeActionOptions(ctx context.Context, s Services, trainerData basicTrainer
 	mlt.Moves = make([]pkmn.MoveLookupElement, currPkmn.GetPokemon().MoveCount())
 
 	// Construct the move lookup elements
-	moveOrder := fisherYates(1, currPkmn.GetPokemon().MoveCount())
 	moves := currPkmn.GetPokemon().MoveIDsAsSlice()
 	for i, moveID := range moves {
 		// Fetch move info from PokeAPI
@@ -75,7 +55,7 @@ func makeActionOptions(ctx context.Context, s Services, trainerData basicTrainer
 		}
 
 		mlt.Moves[i] = pkmn.MoveLookupElement{
-			ID:       moveOrder[i],
+			ID:       i,
 			MoveID:   moveID,
 			MoveName: move.Name}
 	}
@@ -92,10 +72,9 @@ func makeActionOptions(ctx context.Context, s Services, trainerData basicTrainer
 	pmlt.Members = make([]pkmn.PartyMemberLookupElement, len(party))
 
 	// Construct the party member lookup elements
-	partyOrder := fisherYates(1, len(party))
 	for i, val := range party {
 		element := pkmn.PartyMemberLookupElement{
-			ID:       partyOrder[i],
+			ID:       i,
 			SlotID:   i,
 			PkmnName: val.GetPokemon().Name}
 		pmlt.Members[i] = element
