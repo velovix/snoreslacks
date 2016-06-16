@@ -49,18 +49,6 @@ type Battle interface {
 	GetBattle() *pkmn.Battle
 }
 
-// MoveLookupTable describes a database representation of a move lookup table
-// that can emit a pkmn.MoveLookupTable
-type MoveLookupTable interface {
-	GetMoveLookupTable() *pkmn.MoveLookupTable
-}
-
-// PartyMemberLookupTable describes a database representation of a party
-// member lookup table that can emit a pkmn.PartyMemberLookupTable.
-type PartyMemberLookupTable interface {
-	GetPartyMemberLookupTable() *pkmn.PartyMemberLookupTable
-}
-
 // TrainerBattleInfo describes a database representation of a trainer battle
 // info that can emit a pkmn.TrainerBattleInfo.
 type TrainerBattleInfo interface {
@@ -134,32 +122,6 @@ type Database interface {
 	// PurgeBattle deletes the battle that the two trainers are involved in and
 	// purges any relating data having to do with this battle.
 	PurgeBattle(ctx context.Context, p1uuid, p2uuid string) error
-
-	// NewMoveLookupTable creates a database move lookup table that is ready
-	// to be saved from the given pkmn.MoveLookupTable.
-	NewMoveLookupTable(mlt pkmn.MoveLookupTable) MoveLookupTable
-	// SaveMoveLookupTable Saves a move lookup table to the database given the
-	// battle object it belongs to.
-	SaveMoveLookupTable(ctx context.Context, table MoveLookupTable, b Battle) error
-	// LoadMoveLookupTables Loads all the move lookup tables that the given
-	// battle object owns.
-	LoadMoveLookupTables(ctx context.Context, b Battle) ([]MoveLookupTable, error)
-	// DeleteMoveLookupTables deletes all move lookup tables under the given
-	// battle.
-	DeleteMoveLookupTables(ctx context.Context, b Battle) error
-
-	// NewPartyMemberLookupTable creates a database party member lookup table
-	// that is ready to be saved from the given pkmn.PartyMemberLookupTable.
-	NewPartyMemberLookupTable(pmlt pkmn.PartyMemberLookupTable) PartyMemberLookupTable
-	// SavePartyMemberLookupTable Saves a party member lookup table to the
-	// database given the Battle object it belongs to.
-	SavePartyMemberLookupTable(ctx context.Context, table PartyMemberLookupTable, b Battle) error
-	// LoadPartyMemberLookupTables Loads all the party member lookup tables
-	// that the given Battle object owns.
-	LoadPartyMemberLookupTables(ctx context.Context, b Battle) ([]PartyMemberLookupTable, error)
-	// DeletePartyMemberLookupTables deletes all party member lookup tables
-	// under the given battle.
-	DeletePartyMemberLookupTables(ctx context.Context, b Battle) error
 
 	// NewTrainerBattleInfo creates a new trainer battle info that is ready to
 	// be saved from the given pkmn.TrainerBattleInfo.

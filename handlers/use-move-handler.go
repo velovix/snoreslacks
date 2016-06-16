@@ -39,8 +39,8 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 		return handlerError{user: "could not load battle data", err: err}
 	}
 
-	// Extract the move ID from the command
-	scrambledID, err := strconv.Atoi(slackReq.CommandParams[0])
+	// Extract the move slot ID from the command
+	moveSlotID, err := strconv.Atoi(slackReq.CommandParams[0])
 	if err != nil {
 		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     invalidCommandTemplate,
@@ -51,24 +51,19 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 		return nil // There is nothing else to process
 	}
 
-	// Get all the move lookup tables
-	mlts, err := s.DB.LoadMoveLookupTables(ctx, battleData.battle)
-	if err != nil {
-		return handlerError{user: "could not fetch move lookup tables", err: err}
-	}
-	// Find the trainer's move lookup table
-	var mlt *pkmn.MoveLookupTable
-	for _, val := range mlts {
-		if val.GetMoveLookupTable().TrainerUUID == requester.trainer.GetTrainer().UUID {
-			mlt = val.GetMoveLookupTable()
-			break
+	// Check if the given slot ID is valid
+	if moveSlotID > battleData.requester.activePkmn().GetPokemon().MoveCount() {
+		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     invalidMoveSlotTemplate,
+			TemplInfo: moveSlotID})
+		if err != nil {
+			return handlerError{user: "could not populate invalid move slot tempalate", err: err}
 		}
+		return nil // There is nothing else to do
 	}
-	if mlt == nil {
-		// The trainer doesn't have a move lookup table
-		return handlerError{user: "could not fetch move lookup table", err: err}
-	}
-	moveID := mlt.Lookup(scrambledID)
+
+	// Get the move ID of the requested slot
+	moveID := battleData.requester.activePkmn().GetPokemon().MoveIDsAsSlice()[moveSlotID-1]
 
 	// Set up the next action to be a move action
 	battleData.requester.battleInfo.GetTrainerBattleInfo().FinishedTurn = true
