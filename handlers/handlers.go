@@ -100,7 +100,7 @@ func (r Runner) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Run the task, so long as the preprocessing was successful and it said
 	// the task should be run
-	if err != nil && shouldRunTask {
+	if err == nil && shouldRunTask {
 		err = r.Servs.DB.Transaction(ctx, func(ctx context.Context) error {
 			return r.Task.runTask(ctx, r.Servs)
 		})

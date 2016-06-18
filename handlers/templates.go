@@ -173,19 +173,19 @@ var noSuchTrainerExistsTemplate *template.Template
 // Waiting for battle template. This template will be shown when a trainer
 // is waiting to battle another trainer.
 var waitingForBattleTemplateText = `
-Trainer {{ .P1 }} wants to battle {{ .P2 }}!
+Trainer {{ .Challenger }} wants to battle {{ .Opponent }}!
 `
 var waitingForBattleTemplate *template.Template
 
 // Battle started template. This template will be shown when a battle between
 // trainers begins.
 var battleStartedTemplateText = `
-A battle has started between {{ .P1 }} and {{ .P2 }}!
+A battle has started between {{ .Challenger }} and {{ .Opponent }}!
 `
 var battleStartedTemplate *template.Template
 
 var waitingForfeitTemplateText = `
-{{ .P1 }} has stopped challenging {{ .P2 }}.
+{{ .Forfeitter }} has stopped challenging {{ .Opponent }}.
 `
 var waitingForfeitTemplate *template.Template
 

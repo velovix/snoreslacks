@@ -43,6 +43,12 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 		opponentUUID = battleData.battle.GetBattle().P2
 	}
 
+	// Load the opponent
+	opponent, err := loadBasicTrainerData(ctx, s.DB, opponentUUID)
+	if err != nil {
+		return handlerError{user: "could not load opponent information", err: err}
+	}
+
 	// Take the current trainer out of battle mode
 	requester.trainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
 
@@ -51,21 +57,21 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 
 		// Construct the template letting everyone know that the trainer
 		// forfeitted
+		templInfo := struct {
+			Forfeitter string
+			Opponent   string
+		}{
+			Forfeitter: requester.trainer.GetTrainer().Name,
+			Opponent:   opponent.trainer.GetTrainer().Name}
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     waitingForfeitTemplate,
-			TemplInfo: battleData.battle.GetBattle(),
+			TemplInfo: templInfo,
 			Public:    true})
 		if err != nil {
 			return handlerError{user: "could not populate waiting forfeit template", err: err}
 		}
 	} else if battleData.battle.GetBattle().Mode == pkmn.StartedBattleMode {
 		// The battle has started, so the forfeitter will lose
-
-		// Load the opponent
-		opponent, err := loadBasicTrainerData(ctx, s.DB, opponentUUID)
-		if err != nil {
-			return handlerError{user: "could not load opponent information", err: err}
-		}
 
 		// Take the opponent out of battle mode
 		opponent.trainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
@@ -100,7 +106,7 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 	}
 
 	// Save changes to the current trainer
-	err := s.DB.SaveTrainer(ctx, requester.trainer)
+	err = s.DB.SaveTrainer(ctx, requester.trainer)
 	if err != nil {
 		return handlerError{user: "could not save the requesting trainer", err: err}
 	}

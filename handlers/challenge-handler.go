@@ -153,9 +153,15 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 		b.GetBattle().Mode = pkmn.StartedBattleMode // Start the battle
 
 		// Notify everyone that a battle has started
+		templInfo := struct {
+			Challenger string
+			Opponent   string
+		}{
+			Challenger: requester.trainer.GetTrainer().Name,
+			Opponent:   opponent.trainer.GetTrainer().Name}
 		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     battleStartedTemplate,
-			TemplInfo: b,
+			TemplInfo: templInfo,
 			Public:    true})
 		if err != nil {
 			return handlerError{user: "could not populate battle started template", err: err}
@@ -208,10 +214,16 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 		s.Log.Infof(ctx, "creating a new battle: %+v", b)
 
 		// Notify everyone that the trainer is waiting for a battle
+		templInfo := struct {
+			Challenger string
+			Opponent   string
+		}{
+			Challenger: requester.trainer.GetTrainer().Name,
+			Opponent:   opponent.trainer.GetTrainer().Name}
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Type:      messaging.Important,
 			Templ:     waitingForBattleTemplate,
-			TemplInfo: b,
+			TemplInfo: templInfo,
 			Public:    true})
 		if err != nil {
 			return handlerError{user: "could not populatle waiting for battle template", err: err}

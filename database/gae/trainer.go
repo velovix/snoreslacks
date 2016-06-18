@@ -149,7 +149,7 @@ func (db GAEDatabase) LoadLastContactURL(ctx context.Context, dbt database.Train
 // LoadUUIDFromHumanTrainerName finds the corresponding UUID for the given
 // name of a human (non-NPC) trainer.
 func (db GAEDatabase) LoadUUIDFromHumanTrainerName(ctx context.Context, name string) (string, error) {
-	var trainers []database.Trainer
+	var trainers []GAETrainer
 
 	_, err := datastore.NewQuery(trainerKindName).
 		Filter("Name =", name).
@@ -161,9 +161,9 @@ func (db GAEDatabase) LoadUUIDFromHumanTrainerName(ctx context.Context, name str
 	if len(trainers) == 0 {
 		return "", errors.Wrap(database.ErrNoResults, "loading UUID from human trainer name")
 	}
-	if len(trainers) > 0 {
+	if len(trainers) > 1 {
 		return "", errors.Errorf("multiple human trainers share the same name '%s'", name)
 	}
 
-	return trainers[0].GetTrainer().Name, nil
+	return trainers[0].GetTrainer().UUID, nil
 }
