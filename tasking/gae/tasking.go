@@ -22,7 +22,7 @@ func (q GAEQueue) Add(ctx context.Context, url string, data []byte) {
 		Path:    url,
 		Payload: data,
 		RetryOptions: &taskqueue.RetryOptions{
-			RetryLimit: 0,
+			RetryLimit: 1,
 			AgeLimit:   time.Nanosecond},
 		Header: http.Header(map[string][]string{
 			"Content-Type": {"application/octet-stream"}}),

@@ -7,7 +7,11 @@
 //	db, err := database.Get("gae")
 package gaedatabase
 
-import "github.com/velovix/snoreslacks/database"
+import (
+	"github.com/velovix/snoreslacks/database"
+	"golang.org/x/net/context"
+	"google.golang.org/appengine/datastore"
+)
 
 const (
 	pokemonKindName           = "Pokemon"
@@ -23,4 +27,13 @@ type GAEDatabase struct{}
 
 func init() {
 	database.Register("gae", GAEDatabase{})
+}
+
+// Transaction runs the given function in a transaction, meaning that the
+// modified fields are locked down and can't be changed by other
+// goroutines. It may also be able to roll back changes if an error occurs.
+func (db GAEDatabase) Transaction(ctx context.Context, f func(context.Context) error) error {
+	return datastore.RunInTransaction(ctx, f, &datastore.TransactionOptions{
+		XG:       true,
+		Attempts: 0})
 }

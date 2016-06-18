@@ -11,36 +11,36 @@ import (
 
 // loadBasicTrainerData loads some basic information about the trainer. It
 // assumes that all information will be present and errors out if it is not.
-func loadBasicTrainerData(ctx context.Context, db database.Database, uuid string) (basicTrainerData, error) {
+func loadBasicTrainerData(ctx context.Context, db database.Database, uuid string) (*basicTrainerData, error) {
 	var td basicTrainerData
 	var err error
 
 	// Read in the trainer data
 	td.trainer, err = db.LoadTrainer(ctx, uuid)
 	if err != nil {
-		return basicTrainerData{}, err
+		return &basicTrainerData{}, err
 	}
 
 	// Load the trainer's party
 	td.pkmn, err = db.LoadParty(ctx, td.trainer)
 	// It's okay if the trainer doesn't have any Pokemon yet
 	if err != nil && !database.IsNoResults(err) {
-		return basicTrainerData{}, err
+		return &basicTrainerData{}, err
 	}
 
 	// Load the last contact URL if it exists
 	td.lastContactURL, err = db.LoadLastContactURL(ctx, td.trainer)
 	// it's okay if the trainer doesn't have a last contact URL yet
 	if err != nil && !database.IsNoResults(err) {
-		return basicTrainerData{}, err
+		return &basicTrainerData{}, err
 	}
 
-	return td, nil
+	return &td, nil
 }
 
 // saveBasicTrainerData saves all relevant information contained in the data
 // structure to the database.
-func saveBasicTrainerData(ctx context.Context, db database.Database, btd basicTrainerData) error {
+func saveBasicTrainerData(ctx context.Context, db database.Database, btd *basicTrainerData) error {
 	// The last contact URL is not saved here because it is saved by the main
 	// handler
 
@@ -63,52 +63,54 @@ func saveBasicTrainerData(ctx context.Context, db database.Database, btd basicTr
 // some basic trainer information, given the battle that this data is in
 // reference to. It assumes all relevant information is available and errors
 // out if this is not the case.
-func loadBattleTrainerData(ctx context.Context, db database.Database, b database.Battle, uuid string) (battleTrainerData, error) {
+func loadBattleTrainerData(ctx context.Context, db database.Database, b database.Battle, uuid string) (*battleTrainerData, error) {
 	var err error
 	var btd battleTrainerData
 
 	// Load the basic trainer data
 	btd.basicTrainerData, err = loadBasicTrainerData(ctx, db, uuid)
 	if err != nil {
-		return battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
+		return &battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
 	}
 
 	// Load the trainer's battle info
 	btd.battleInfo, err = db.LoadTrainerBattleInfo(ctx, b, uuid)
 	if err != nil {
-		return battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
+		return &battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
 	}
 
 	// Load each Pokemon's battle info
 	for _, pkmn := range btd.pkmn {
 		pbi, err := db.LoadPokemonBattleInfo(ctx, b, pkmn.GetPokemon().UUID)
 		if err != nil {
-			return battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
+			return &battleTrainerData{}, errors.Wrap(err, "loading battle trainer data")
 		}
 		btd.pkmnBattleInfo = append(btd.pkmnBattleInfo, pbi)
 	}
 
-	return btd, nil
+	return &btd, nil
 
 }
 
 // loadBattleData loads the current battle the given trainer is in along with a
-// bunch of other useful information about the battle. It assumes that all
-// information will be present and errors out if it is not.
-func loadBattleData(ctx context.Context, db database.Database, requester basicTrainerData) (battleData, error) {
+// bunch of other useful information about the battle. It will return an
+// incomplete object if one of its components is missing or if a database error
+// occurs, but will still return those errors. It's safe to use this object if
+// it returns a NoResults error, but not otherwise.
+func loadBattleData(ctx context.Context, db database.Database, requester *basicTrainerData) (*battleData, error) {
 	var err error
 	var bd battleData
 
 	// Load the battle the trainer is in
 	bd.battle, err = db.LoadBattleTrainerIsIn(ctx, requester.trainer.GetTrainer().UUID)
 	if err != nil {
-		return battleData{}, errors.Wrap(err, "loading battle data")
+		return &bd, errors.Wrap(err, "loading battle data")
 	}
 
 	// Load the requester information
 	bd.requester, err = loadBattleTrainerData(ctx, db, bd.battle, requester.trainer.GetTrainer().UUID)
 	if err != nil {
-		return battleData{}, errors.Wrap(err, "loading battle data")
+		return &bd, errors.Wrap(err, "loading battle data")
 	}
 
 	// Figure out the UUID of the opponent
@@ -119,14 +121,14 @@ func loadBattleData(ctx context.Context, db database.Database, requester basicTr
 	// Load the opponent information
 	bd.opponent, err = loadBattleTrainerData(ctx, db, bd.battle, opponentUUID)
 	if err != nil {
-		return battleData{}, errors.Wrap(err, "loading battle data")
+		return &bd, errors.Wrap(err, "loading battle data")
 	}
 
-	return bd, nil
+	return &bd, nil
 }
 
 // saveBattleData saves all objects loaded in the battle data.
-func saveBattleData(ctx context.Context, db database.Database, bd battleData) error {
+func saveBattleData(ctx context.Context, db database.Database, bd *battleData) error {
 
 	// Save the battle
 	err := db.SaveBattle(ctx, bd.battle)

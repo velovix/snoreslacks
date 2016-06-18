@@ -15,7 +15,7 @@ func (h *WaitingHelp) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
 
 	// Send the templated info
 	err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
@@ -37,7 +37,7 @@ func (h *BattleWaitingHelp) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
 
 	// Send the templated info
 	err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
@@ -59,7 +59,7 @@ func (h *BattlingHelp) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
 
 	// Send the templated info
 	err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{

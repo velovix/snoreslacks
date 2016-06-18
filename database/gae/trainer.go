@@ -153,6 +153,7 @@ func (db GAEDatabase) LoadUUIDFromHumanTrainerName(ctx context.Context, name str
 
 	_, err := datastore.NewQuery(trainerKindName).
 		Filter("Name =", name).
+		Filter("Type =", pkmn.HumanTrainerType).
 		GetAll(ctx, &trainers)
 	if err != nil {
 		return "", err

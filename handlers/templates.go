@@ -372,6 +372,36 @@ Your Pokémon does not have a move in slot {{ . }}!
 `
 var invalidMoveSlotTemplate *template.Template
 
+var challengingWhenInWrongModeText = `
+You cannot challenge a trainer right now!
+`
+var challengingWhenInWrongMode *template.Template
+
+var forfeittingWhenInWrongModeText = `
+You cannot forfeit a battle right now!
+`
+var forfeittingWhenInWrongMode *template.Template
+
+var choosingStarterWhenInWrongModeText = `
+You cannot choose a starter more than once!
+`
+var choosingStarterWhenInWrongMode *template.Template
+
+var usingMoveWhenInWrongModeText = `
+You cannot choose a move right now!
+`
+var usingMoveWhenInWrongMode *template.Template
+
+var wildEncounterWhenInWrongModeText = `
+You cannot engage in a wild encounter right now!
+`
+var wildEncounterWhenInWrongMode *template.Template
+
+var catchWhenInWrongModeText = `
+You cannot catch a Pokémon right now!
+`
+var catchWhenInWrongMode *template.Template
+
 // toBaseOne converts the given number from base-zero to base-one by adding one
 // to it. This is intended to be used in templates.
 func toBaseOne(i int) int {
@@ -413,4 +443,10 @@ func init() {
 	pokemonCaughtTemplate = template.Must(template.New("").Funcs(funcMap).Parse(pokemonCaughtTemplateText))
 	pokemonNotCaughtTemplate = template.Must(template.New("").Funcs(funcMap).Parse(pokemonNotCaughtTemplateText))
 	invalidMoveSlotTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidMoveSlotTemplateText))
+	challengingWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(challengingWhenInWrongModeText))
+	forfeittingWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(forfeittingWhenInWrongModeText))
+	choosingStarterWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(choosingStarterWhenInWrongModeText))
+	usingMoveWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(usingMoveWhenInWrongModeText))
+	wildEncounterWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(wildEncounterWhenInWrongModeText))
+	catchWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(catchWhenInWrongModeText))
 }

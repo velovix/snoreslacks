@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 
 	"golang.org/x/net/context"
@@ -21,7 +22,24 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+	battleData := ctx.Value("battle data").(*battleData)
+
+	// Assert that the trainer is in battle mode
+	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     usingMoveWhenInWrongMode,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "failed to populate using move when in wrong mode template", err: err}
+		}
+		return nil // No more work to do
+	}
+
+	// Assert that all necessary data is in the battle data object
+	if !battleData.isComplete() {
+		return handlerError{user: "could not load battle data", err: errors.New("incomplete battle data object")}
+	}
 
 	// Check if the command looks correct
 	if len(slackReq.CommandParams) != 1 {
@@ -31,12 +49,7 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 		if err != nil {
 			return handlerError{user: "failed to populate invalid command template", err: err}
 		}
-	}
-
-	// Load the battle data
-	battleData, err := loadBattleData(ctx, s.DB, requester)
-	if err != nil {
-		return handlerError{user: "could not load battle data", err: err}
+		return nil // No more work to do
 	}
 
 	// Extract the move slot ID from the command
@@ -95,13 +108,13 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 	var battleOver bool
 	// Do any work required to get the opponent ready for the turn to be
 	// processed
-	ready, err := preprocessTurn(ctx, s, &battleData)
+	ready, err := preprocessTurn(ctx, s, battleData)
 	if err != nil {
 		return handlerError{user: "could not do preprocessing on the current turn", err: err}
 	}
 	if ready {
 		// The opponent is ready and the turn may be processed
-		battleOver, err = tp.process(ctx, &battleData)
+		battleOver, err = tp.process(ctx, battleData)
 		if err != nil {
 			return handlerError{user: "could not process the current turn", err: err}
 		}

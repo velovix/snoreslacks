@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"
 	"github.com/velovix/snoreslacks/pokeapi"
@@ -48,6 +49,19 @@ func (h *NewTrainer) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
+
+	// Assert that no such trainer exists yet
+	_, err := s.DB.LoadTrainer(ctx, slackReq.UserID)
+	if err == nil {
+		// The trainer already exists, but we don't want to error out at the
+		// user because users don't explitly ask to become a trainer.
+		s.Log.Warningf(ctx, "attempt to create a new trainer when the trainer already exists")
+		return nil
+	} else if err != nil && !database.IsNoResults(err) {
+		// A miscellaneous error occurred
+		return handlerError{user: "could not check if trainer exists",
+			err: errors.Wrap(err, "while checking if trainer exists")}
+	}
 
 	// Construct a new trainer
 	requester := s.DB.NewTrainer(pkmn.Trainer{
@@ -101,7 +115,18 @@ func (h *ChoosingStarter) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+
+	// Assert that the trainer does not have any Pokemon yet
+	if len(requester.pkmn) != 0 {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     choosingStarterWhenInWrongMode,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not sned choosing starter when in wrong mode template", err: err}
+		}
+		return nil // No more work to do
+	}
 
 	// Fetch information on the starters
 	starters, err := fetchStarters(ctx, client, s.Fetcher)

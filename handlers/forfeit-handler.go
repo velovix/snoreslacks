@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+
 	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"
 	"golang.org/x/net/context"
@@ -15,36 +17,48 @@ type Forfeit struct {
 func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+	battleData := ctx.Value("battle data").(*battleData)
 
-	// Load the battle the trainer is in
-	b, err := s.DB.LoadBattleTrainerIsIn(ctx, requester.trainer.GetTrainer().UUID)
-	if err != nil {
-		return handlerError{user: "could not load the battle the trainer is in", err: err}
+	// Assert that the trainer is currently in either battling mode or battle
+	// waiting mode
+	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     challengingWhenInWrongMode,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not send challenging when in wrong mode template", err: err}
+		}
+		return nil // No more work to do
+	}
+
+	// Assert that the required data is inside of the battle data object
+	if !battleData.hasBattle() {
+		return handlerError{user: "could not load battle data", err: errors.New("no battle object in battle data")}
 	}
 
 	// Find the UUID of the opponent
-	opponentUUID := b.GetBattle().P1
+	opponentUUID := battleData.battle.GetBattle().P1
 	if opponentUUID == requester.trainer.GetTrainer().UUID {
-		opponentUUID = b.GetBattle().P2
+		opponentUUID = battleData.battle.GetBattle().P2
 	}
 
 	// Take the current trainer out of battle mode
 	requester.trainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
 
-	if b.GetBattle().Mode == pkmn.WaitingBattleMode {
+	if battleData.battle.GetBattle().Mode == pkmn.WaitingBattleMode {
 		// The battle hadn't started yet, so nobody loses
 
 		// Construct the template letting everyone know that the trainer
 		// forfeitted
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     waitingForfeitTemplate,
-			TemplInfo: b,
+			TemplInfo: battleData.battle.GetBattle(),
 			Public:    true})
 		if err != nil {
 			return handlerError{user: "could not populate waiting forfeit template", err: err}
 		}
-	} else if b.GetBattle().Mode == pkmn.StartedBattleMode {
+	} else if battleData.battle.GetBattle().Mode == pkmn.StartedBattleMode {
 		// The battle has started, so the forfeitter will lose
 
 		// Load the opponent
@@ -86,14 +100,14 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 	}
 
 	// Save changes to the current trainer
-	err = s.DB.SaveTrainer(ctx, requester.trainer)
+	err := s.DB.SaveTrainer(ctx, requester.trainer)
 	if err != nil {
 		return handlerError{user: "could not save the requesting trainer", err: err}
 	}
 
 	// The battle is over, so it should be deleted
-	s.Log.Infof(ctx, "deleting a battle %s/%s", b.GetBattle().P1, b.GetBattle().P2)
-	err = s.DB.PurgeBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
+	s.Log.Infof(ctx, "deleting a battle %s/%s", battleData.battle.GetBattle().P1, battleData.battle.GetBattle().P2)
+	err = s.DB.PurgeBattle(ctx, battleData.battle.GetBattle().P1, battleData.battle.GetBattle().P2)
 	if err != nil {
 		return handlerError{user: "could not delete the battle now that it's over", err: err}
 	}
