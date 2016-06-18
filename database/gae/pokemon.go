@@ -94,21 +94,18 @@ func (db GAEDatabase) SaveParty(ctx context.Context, dbt database.Trainer, party
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		for _, dbpkmn := range party {
-			pkmn, ok := dbpkmn.(*GAEPokemon)
-			if !ok {
-				panic("One of the given Pokemon is not of the right type for this implementation. Are you using two implementations by mistake?")
-			}
-
-			err := db.SavePokemon(ctx, t, pkmn)
-			if err != nil {
-				return err
-			}
+	for _, dbpkmn := range party {
+		pkmn, ok := dbpkmn.(*GAEPokemon)
+		if !ok {
+			panic("One of the given Pokemon is not of the right type for this implementation. Are you using two implementations by mistake?")
 		}
-		return nil
-	}, nil)
 
+		err := db.SavePokemon(ctx, t, pkmn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // LoadParty returns all the Pokemon in the given trainer's party. The

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+
 	"golang.org/x/net/context"
 
 	"github.com/satori/go.uuid"
@@ -18,7 +20,17 @@ type WildEncounter struct {
 func (h *WildEncounter) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+
+	// Assert that the trainer is currently in waiting mode
+	if requester.trainer.GetTrainer().Mode != pkmn.WaitingTrainerMode {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     wildEncounterWhenInWrongMode,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not populate wild encounter when in wrong mode template", err: err}
+		}
+	}
 
 	// Put the trainer in battle mode
 	requester.trainer.GetTrainer().Mode = pkmn.BattlingTrainerMode
@@ -131,17 +143,27 @@ type CatchPokemon struct {
 func (h *CatchPokemon) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+	battleData := ctx.Value("battle data").(*battleData)
 
-	// Load the battle data
-	battleData, err := loadBattleData(ctx, s.DB, requester)
-	if err != nil {
-		return handlerError{user: "could not load the battle data", err: err}
+	// Assert that the trainer is in battle mode
+	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     catchWhenInWrongMode,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not populate catch when in wrong mode template", err: err}
+		}
+	}
+
+	// Assert that all necessary data is in the battle data object
+	if !battleData.isComplete() {
+		return handlerError{user: "could not load battle data", err: errors.New("incomplete battle data object")}
 	}
 
 	if battleData.opponent.trainer.GetTrainer().Type != pkmn.WildTrainerType {
 		// You can only catch wild Pokemon! Let the user know that fact.
-		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     cannotCatchTrainerPokemonTemplate,
 			TemplInfo: nil,
 			Type:      messaging.Important})
@@ -163,13 +185,13 @@ func (h *CatchPokemon) runTask(ctx context.Context, s Services) error {
 	var battleOver bool
 	// Do any work required to get the opponent ready for the turn to be
 	// processed
-	ready, err := preprocessTurn(ctx, s, &battleData)
+	ready, err := preprocessTurn(ctx, s, battleData)
 	if err != nil {
 		return handlerError{user: "could not do preprocessing on the current turn", err: err}
 	}
 	if ready {
 		// The opponent is ready and the turn may be processed
-		battleOver, err = tp.process(ctx, &battleData)
+		battleOver, err = tp.process(ctx, battleData)
 		if err != nil {
 			return handlerError{user: "could not process the current turn", err: err}
 		}

@@ -19,6 +19,17 @@ type Tasker interface {
 	runTask(ctx context.Context, s Services) error
 }
 
+// Preprocessor describes a task that needs to do some preprocessing before
+// its main work inside the transaction. This is usually for adding request
+// scoped variables to the request context that are specific to this task.
+type Preprocessor interface {
+	Tasker
+	// preprocess does preprocessing work specific to the task. The second
+	// return value is false if the task itself should not run for whatever
+	// reason.
+	preprocess(ctx context.Context, s Services) (context.Context, bool, error)
+}
+
 // Runner is a handler object that can run tasks.
 type Runner struct {
 	Servs Services
@@ -57,20 +68,45 @@ func (r Runner) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Load the requesting trainer's data, if one exists
 	t, err := loadBasicTrainerData(ctx, r.Servs.DB, slackReq.UserID)
 	if err == nil {
-		// Add the trainer to the context if we have it
+		// Add the trainer to the context since we have it
 		ctx = context.WithValue(ctx, "requesting trainer", t)
 	} else if err != nil && !database.IsNoResults(err) {
 		// There is an error and it isn't because there isn't a trainer
 		// available
-		http.Error(w, "could not decode Slack request", 500)
-		r.Servs.Log.Errorf(ctx, "while decoding the Slack request: %s", err)
+		http.Error(w, "could not load basic trainer data", 500)
+		r.Servs.Log.Errorf(ctx, "while loading basic trainer data: %s", err)
 		return
 	}
 
-	// Run the task
-	err = r.Task.runTask(ctx, r.Servs)
+	// Load the battle data, if it exists and if the trainer exists
+	if t, ok := ctx.Value("requesting trainer").(*basicTrainerData); ok {
+		bd, err := loadBattleData(ctx, r.Servs.DB, t)
+		if err == nil || database.IsNoResults(err) {
+			// Add the battle data to the context even if it's incomplete
+			ctx = context.WithValue(ctx, "battle data", bd)
+		} else if err != nil {
+			// There is an error and it is not because of a lack of data
+			http.Error(w, "could not load battle data", 500)
+			r.Servs.Log.Errorf(ctx, "while loading battle data: %s", err)
+			return
+		}
+	}
+
+	// Do any required preprocessing if the task is a preprocessor
+	shouldRunTask := true
+	if proc, ok := r.Task.(Preprocessor); ok {
+		ctx, shouldRunTask, err = proc.preprocess(ctx, r.Servs)
+	}
+
+	// Run the task, so long as the preprocessing was successful and it said
+	// the task should be run
+	if err != nil && shouldRunTask {
+		err = r.Servs.DB.Transaction(ctx, func(ctx context.Context) error {
+			return r.Task.runTask(ctx, r.Servs)
+		})
+	}
 	if err != nil {
-		// An error has occurred
+		// An error has occurred in either processing or preprocessing
 		switch err := err.(type) {
 		case handlerError:
 			// We have special processing for handlerErrors

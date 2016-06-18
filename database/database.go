@@ -150,6 +150,11 @@ type Database interface {
 	// DeletePokemonBattleInfos deletes all Pokemon battle infos under the
 	// given battle.
 	DeletePokemonBattleInfos(ctx context.Context, b Battle) error
+
+	// Transaction runs the given function in a transaction, meaning that the
+	// modified fields are locked down and can't be changed by other
+	// goroutines. It may also be able to roll back changes if an error occurs.
+	Transaction(ctx context.Context, f func(context.Context) error) error
 }
 
 var implementations map[string]Database

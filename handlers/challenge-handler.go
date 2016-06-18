@@ -15,7 +15,7 @@ type Challenge struct {
 // Pokemon the trainer is starting the battle with, along with a sprite of that
 // Pokemon. It is assumed that the trainer starts the battle with the first
 // Pokemon in the party, like in the main series games.
-func (h *Challenge) sendInitialPkmnMessage(ctx context.Context, t basicTrainerData) error {
+func (h *Challenge) sendInitialPkmnMessage(ctx context.Context, t *basicTrainerData) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
 
@@ -33,11 +33,11 @@ func (h *Challenge) sendInitialPkmnMessage(ctx context.Context, t basicTrainerDa
 		TemplInfo: initialPokemonTemplInfo})
 }
 
-func (h *Challenge) runTask(ctx context.Context, s Services) error {
+func (h *Challenge) preprocess(ctx context.Context, s Services) (context.Context, bool, error) {
 	// Load request-specific objects
 	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
 
 	// Check if the command was used correctly
 	if len(slackReq.CommandParams) != 1 {
@@ -45,8 +45,9 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 			Templ:     invalidCommandTemplate,
 			TemplInfo: nil})
 		if err != nil {
-			return handlerError{user: "could not send invalid command template", err: err}
+			return ctx, false, handlerError{user: "could not send invalid command template", err: err}
 		}
+		return ctx, false, nil // No more work to do
 	}
 
 	// Trainers are identified by their UUID, not their display name, so we
@@ -54,12 +55,6 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 	// sure usernames are original, so this shouldn't be a problem.
 	opponentName := slackReq.CommandParams[0]
 	opponentUUID, err := s.DB.LoadUUIDFromHumanTrainerName(ctx, opponentName)
-	if err != nil {
-		return handlerError{user: "could not convert the opponent's username to a UUID", err: err}
-	}
-
-	// Check if the opponent exists
-	opponent, err := loadBasicTrainerData(ctx, s.DB, opponentUUID)
 	if database.IsNoResults(err) {
 		// Construct the template notifying the trainer that the opponent
 		// doesn't exist
@@ -67,11 +62,45 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 			Templ:     noSuchTrainerExistsTemplate,
 			TemplInfo: opponentName})
 		if err != nil {
-			return handlerError{user: "could not populate no such trainer exists template", err: err}
+			return ctx, false, handlerError{user: "could not populate no such trainer exists template", err: err}
 		}
-		return nil // This request has been finished
+		return ctx, false, nil // This request has been finished
 	} else if err != nil {
-		// A generic error occurred
+		// Some generic error occurred
+		s.Log.Infof(ctx, "an error occurred!")
+		return ctx, false, handlerError{user: "could not convert the opponent's username to a UUID", err: err}
+	}
+
+	ctx = context.WithValue(ctx, "opponent UUID", opponentUUID)
+
+	return ctx, true, nil
+}
+
+func (h *Challenge) runTask(ctx context.Context, s Services) error {
+	// Load request-specific objects
+	client := ctx.Value("client").(messaging.Client)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+	opponentUUID := ctx.Value("opponent UUID").(string)
+
+	// No checking has to be done on the command itself because, in this case,
+	// the preprocessor takes care of that
+
+	// Assert that the trainer is currently in waiting mode
+	if requester.trainer.GetTrainer().Mode != pkmn.WaitingTrainerMode {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     challengingWhenInWrongMode,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not send challenging when in wrong mode template", err: err}
+		}
+		return nil // No more work to do
+	}
+
+	// Load some info on the opponent
+	opponent, err := loadBasicTrainerData(ctx, s.DB, opponentUUID)
+	if err != nil {
+		// We know the opponent exists from the preprocessing, so this should
+		// not happen unless something is wrong
 		return handlerError{user: "could not load opponent information", err: err}
 	}
 

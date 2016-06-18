@@ -3,7 +3,6 @@ package handlers
 import (
 	"golang.org/x/net/context"
 
-	"github.com/velovix/snoreslacks/database"
 	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"
 )
@@ -59,20 +58,13 @@ func (h *ViewParty) makeSinglePartyEntry(p *pkmn.Pokemon, currHP int, statusCond
 func (h *ViewParty) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+	battleData := ctx.Value("battle data").(*battleData)
+
+	// The trainer is in a battle if the battle data is fully constructed
+	inBattle := battleData.isComplete()
 
 	var viewPartyTemplateInfo []viewSinglePokemonTemplateInfo
-
-	inBattle := true
-	// Check if the trainer is in a battle
-	b, err := s.DB.LoadBattleTrainerIsIn(ctx, requester.trainer.GetTrainer().UUID)
-	if database.IsNoResults(err) {
-		// No battle was found
-		inBattle = false
-	} else if err != nil {
-		// Some other error happened that was unexpected
-		return handlerError{user: "could not check if trainer is in a battle", err: err}
-	}
 
 	if inBattle {
 		s.Log.Infof(ctx, "the trainer is in a battle so we will show additional information")
@@ -87,7 +79,7 @@ func (h *ViewParty) runTask(ctx context.Context, s Services) error {
 		if inBattle {
 			// Fill in special Pokemon in-battle data if need be
 
-			inBattleStats, err := s.DB.LoadPokemonBattleInfo(ctx, b, p.UUID)
+			inBattleStats, err := s.DB.LoadPokemonBattleInfo(ctx, battleData.battle, p.UUID)
 			if err != nil {
 				return handlerError{user: "could not fetch Pokemon battle info", err: err}
 			}
@@ -101,6 +93,7 @@ func (h *ViewParty) runTask(ctx context.Context, s Services) error {
 	}
 
 	// Send the template
+	var err error
 	if inBattle {
 		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     viewPartyInBattleTemplate,

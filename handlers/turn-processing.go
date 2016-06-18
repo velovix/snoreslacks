@@ -337,8 +337,8 @@ func (tp *turnProcessor) process(ctx context.Context, bd *battleData) (bool, err
 	tp.Log.Infof(ctx, "the turn will be processed now")
 
 	// Make these values easier to access
-	curr := &bd.requester
-	opponent := &bd.opponent
+	curr := bd.requester
+	opponent := bd.opponent
 
 	// Load trainer moves if necessary
 	var currPkmnMove, opponentPkmnMove pkmn.Move
