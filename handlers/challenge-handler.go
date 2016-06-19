@@ -78,6 +78,7 @@ func (h *Challenge) preprocess(ctx context.Context, s Services) (context.Context
 
 func (h *Challenge) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
+	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
 	requester := ctx.Value("requesting trainer").(*basicTrainerData)
 	opponentUUID := ctx.Value("opponent UUID").(string)
@@ -215,11 +216,13 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 
 		// Notify everyone that the trainer is waiting for a battle
 		templInfo := struct {
-			Challenger string
-			Opponent   string
+			SlashCommand string
+			Challenger   string
+			Opponent     string
 		}{
-			Challenger: requester.trainer.GetTrainer().Name,
-			Opponent:   opponent.trainer.GetTrainer().Name}
+			SlashCommand: slackReq.SlashCommand,
+			Challenger:   requester.trainer.GetTrainer().Name,
+			Opponent:     opponent.trainer.GetTrainer().Name}
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Type:      messaging.Important,
 			Templ:     waitingForBattleTemplate,

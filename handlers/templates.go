@@ -174,6 +174,8 @@ var noSuchTrainerExistsTemplate *template.Template
 // is waiting to battle another trainer.
 var waitingForBattleTemplateText = `
 Trainer {{ .Challenger }} wants to battle {{ .Opponent }}!
+
+{{ .Opponent }}, if you accept this challenge, type "{{ .SlashCommand }} battle {{ .Challenger }}" to start the battle!
 `
 var waitingForBattleTemplate *template.Template
 
