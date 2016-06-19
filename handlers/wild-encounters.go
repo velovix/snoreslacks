@@ -84,8 +84,10 @@ func (h *WildEncounter) runTask(ctx context.Context, s Services) error {
 	// Send message telling the trainer that an encounter happened
 	templInfo := struct {
 		WildPokemonName string
+		Level           int
 	}{
-		WildPokemonName: wild.GetPokemon().Name}
+		WildPokemonName: wild.GetPokemon().Name,
+		Level:           wild.GetPokemon().Level}
 	err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 		Templ:     wildBattleStartedTemplate,
 		TemplInfo: templInfo,

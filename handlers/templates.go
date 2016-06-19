@@ -328,12 +328,12 @@ var moveReportTemplate *template.Template
 
 var switchPokemonTemplateText = `
 {{ .Switcher }} has withdrawn {{ .WithdrawnPokemon }}.
-{{ .Switcher }} sent out {{ .SelectedPokemon }}!
+{{ .Switcher }} sent out {{ .SelectedPokemon }}! (Lv. {{ .SelectedLevel }})
 `
 var switchPokemonTemplate *template.Template
 
 var initialPokemonSendOutTemplateText = `
-{{ .TrainerName }} sent out {{ .PokemonName }}!
+{{ .TrainerName }} sent out {{ .PokemonName }}! (Lv. {{ .Level }})
 `
 var initialPokemonSendOutTemplate *template.Template
 
@@ -348,7 +348,7 @@ var trainerLostTemplateText = `
 var trainerLostTemplate *template.Template
 
 var wildBattleStartedTemplateText = `
-A wild {{ .WildPokemonName }} appeared!
+A wild {{ .WildPokemonName }} appeared! (Lv. {{ .Level }})
 `
 var wildBattleStartedTemplate *template.Template
 
