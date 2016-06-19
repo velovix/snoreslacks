@@ -89,10 +89,21 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 	// Assert that the trainer is currently in waiting mode
 	if requester.trainer.GetTrainer().Mode != pkmn.WaitingTrainerMode {
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     challengingWhenInWrongMode,
+			Templ:     challengingWhenInWrongModeTemplate,
 			TemplInfo: nil})
 		if err != nil {
 			return handlerError{user: "could not send challenging when in wrong mode template", err: err}
+		}
+		return nil // No more work to do
+	}
+
+	// Assert that the trainer is not trying to battle themselves
+	if requester.trainer.GetTrainer().UUID == opponentUUID {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     noChallengingSelfTemplate,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not populate no challenging self template", err: err}
 		}
 		return nil // No more work to do
 	}
