@@ -17,7 +17,7 @@ type Type struct {
 }
 
 var Normal, Fighting, Flying, Poison, Ground, Rock, Bug,
-	Ghost, Steel, Fire, Water, Grass, Electricity, Psychic,
+	Ghost, Steel, Fire, Water, Grass, Electric, Psychic,
 	Ice, Dragon, Dark, Fairy Type
 
 var nameToType map[string]Type
@@ -64,7 +64,7 @@ func init() {
 		TypeMod{T: Bug, Val: 0.5},
 		TypeMod{T: Fighting, Val: 0.5},
 		TypeMod{T: Grass, Val: 0.5},
-		TypeMod{T: Electricity, Val: 2.0},
+		TypeMod{T: Electric, Val: 2.0},
 		TypeMod{T: Ice, Val: 2.0},
 		TypeMod{T: Rock, Val: 2.0},
 		TypeMod{T: Ground, Val: 0.0}}
@@ -85,7 +85,7 @@ func init() {
 		TypeMod{T: Grass, Val: 2.0},
 		TypeMod{T: Ice, Val: 2.0},
 		TypeMod{T: Water, Val: 2.0},
-		TypeMod{T: Electricity, Val: 0.0}}
+		TypeMod{T: Electric, Val: 0.0}}
 	nameToType[Ground.Name] = Ground
 	Rock.Name = "rock"
 	Rock.Mods = []TypeMod{
@@ -109,25 +109,112 @@ func init() {
 		TypeMod{T: Rock, Val: 2.0}}
 	nameToType[Bug.Name] = Bug
 	Ghost.Name = "ghost"
+	Ghost.Mods = []TypeMod{
+		TypeMod{T: Ghost, Val: 2.0},
+		TypeMod{T: Dark, Val: 2.0},
+		TypeMod{T: Poison, Val: 0.5},
+		TypeMod{T: Bug, Val: 0.5},
+		TypeMod{T: Normal, Val: 0.0},
+		TypeMod{T: Fighting, Val: 0.0}}
 	nameToType[Ghost.Name] = Ghost
 	Steel.Name = "steel"
+	Steel.Mods = []TypeMod{
+		TypeMod{T: Fire, Val: 2.0},
+		TypeMod{T: Fighting, Val: 2.0},
+		TypeMod{T: Ground, Val: 2.0},
+		TypeMod{T: Normal, Val: 0.5},
+		TypeMod{T: Flying, Val: 0.5},
+		TypeMod{T: Grass, Val: 0.5},
+		TypeMod{T: Psychic, Val: 0.5},
+		TypeMod{T: Rock, Val: 0.5},
+		TypeMod{T: Ice, Val: 0.5},
+		TypeMod{T: Bug, Val: 0.5},
+		TypeMod{T: Dragon, Val: 0.5},
+		TypeMod{T: Steel, Val: 0.5},
+		TypeMod{T: Fairy, Val: 0.5},
+		TypeMod{T: Poison, Val: 0.0}}
 	nameToType[Steel.Name] = Steel
 	Fire.Name = "fire"
+	Fire.Mods = []TypeMod{
+		TypeMod{T: Water, Val: 2.0},
+		TypeMod{T: Ground, Val: 2.0},
+		TypeMod{T: Rock, Val: 2.0},
+		TypeMod{T: Fire, Val: 0.5},
+		TypeMod{T: Grass, Val: 0.5},
+		TypeMod{T: Ice, Val: 0.5},
+		TypeMod{T: Bug, Val: 0.5},
+		TypeMod{T: Steel, Val: 0.5},
+		TypeMod{T: Fairy, Val: 0.5}}
 	nameToType[Fire.Name] = Fire
 	Water.Name = "water"
+	Water.Mods = []TypeMod{
+		TypeMod{T: Grass, Val: 2.0},
+		TypeMod{T: Electric, Val: 2.0},
+		TypeMod{T: Fire, Val: 0.5},
+		TypeMod{T: Water, Val: 0.5},
+		TypeMod{T: Ice, Val: 0.5},
+		TypeMod{T: Steel, Val: 0.5}}
 	nameToType[Water.Name] = Water
 	Grass.Name = "grass"
+	Grass.Mods = []TypeMod{
+		TypeMod{T: Fire, Val: 2.0},
+		TypeMod{T: Flying, Val: 2.0},
+		TypeMod{T: Poison, Val: 2.0},
+		TypeMod{T: Ice, Val: 2.0},
+		TypeMod{T: Bug, Val: 2.0},
+		TypeMod{T: Water, Val: 2.0},
+		TypeMod{T: Grass, Val: 2.0},
+		TypeMod{T: Electric, Val: 2.0},
+		TypeMod{T: Ground, Val: 2.0}}
 	nameToType[Grass.Name] = Grass
-	Electricity.Name = "electric"
-	nameToType[Electricity.Name] = Electricity
+	Electric.Name = "electric"
+	Electric.Mods = []TypeMod{
+		TypeMod{T: Ground, Val: 2.0},
+		TypeMod{T: Flying, Val: 0.5},
+		TypeMod{T: Electric, Val: 0.5},
+		TypeMod{T: Steel, Val: 0.5}}
+	nameToType[Electric.Name] = Electric
 	Psychic.Name = "psychic"
+	Psychic.Mods = []TypeMod{
+		TypeMod{T: Bug, Val: 2.0},
+		TypeMod{T: Ghost, Val: 2.0},
+		TypeMod{T: Dark, Val: 2.0},
+		TypeMod{T: Fighting, Val: 0.5},
+		TypeMod{T: Psychic, Val: 0.5}}
 	nameToType[Psychic.Name] = Psychic
 	Ice.Name = "ice"
+	Ice.Mods = []TypeMod{
+		TypeMod{T: Fire, Val: 2.0},
+		TypeMod{T: Fighting, Val: 2.0},
+		TypeMod{T: Rock, Val: 2.0},
+		TypeMod{T: Steel, Val: 2.0},
+		TypeMod{T: Ice, Val: 0.5}}
 	nameToType[Ice.Name] = Ice
 	Dragon.Name = "dragon"
+	Dragon.Mods = []TypeMod{
+		TypeMod{T: Ice, Val: 2.0},
+		TypeMod{T: Dragon, Val: 2.0},
+		TypeMod{T: Fairy, Val: 2.0},
+		TypeMod{T: Fire, Val: 0.5},
+		TypeMod{T: Water, Val: 0.5},
+		TypeMod{T: Grass, Val: 0.5},
+		TypeMod{T: Electric, Val: 0.5}}
 	nameToType[Dragon.Name] = Dragon
 	Dark.Name = "dark"
+	Dark.Mods = []TypeMod{
+		TypeMod{T: Fighting, Val: 2.0},
+		TypeMod{T: Bug, Val: 2.0},
+		TypeMod{T: Fairy, Val: 2.0},
+		TypeMod{T: Ghost, Val: 0.5},
+		TypeMod{T: Dark, Val: 0.5}}
 	nameToType[Dark.Name] = Dark
 	Fairy.Name = "fairy"
+	Dark.Mods = []TypeMod{
+		TypeMod{T: Poison, Val: 2.0},
+		TypeMod{T: Steel, Val: 2.0},
+		TypeMod{T: Fighting, Val: 0.5},
+		TypeMod{T: Bug, Val: 0.5},
+		TypeMod{T: Dark, Val: 0.5},
+		TypeMod{T: Dragon, Val: 0.0}}
 	nameToType[Fairy.Name] = Fairy
 }
