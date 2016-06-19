@@ -23,9 +23,11 @@ func (h *Challenge) sendInitialPkmnMessage(ctx context.Context, t *basicTrainerD
 	initialPokemonTemplInfo := struct {
 		TrainerName string
 		PokemonName string
+		Level       int
 	}{
 		TrainerName: t.trainer.GetTrainer().Name,
-		PokemonName: t.pkmn[0].GetPokemon().Name}
+		PokemonName: t.pkmn[0].GetPokemon().Name,
+		Level:       t.pkmn[0].GetPokemon().Level}
 	return messaging.SendTempl(client, t.lastContactURL, messaging.TemplMessage{
 		Public:    true,
 		Image:     t.pkmn[0].GetPokemon().SpriteURL,
