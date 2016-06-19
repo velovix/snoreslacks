@@ -374,35 +374,40 @@ Your Pokémon does not have a move in slot {{ . }}!
 `
 var invalidMoveSlotTemplate *template.Template
 
-var challengingWhenInWrongModeText = `
+var challengingWhenInWrongModeTemplateText = `
 You cannot challenge a trainer right now!
 `
-var challengingWhenInWrongMode *template.Template
+var challengingWhenInWrongModeTemplate *template.Template
 
-var forfeittingWhenInWrongModeText = `
+var forfeittingWhenInWrongModeTemplateText = `
 You cannot forfeit a battle right now!
 `
-var forfeittingWhenInWrongMode *template.Template
+var forfeittingWhenInWrongModeTemplate *template.Template
 
-var choosingStarterWhenInWrongModeText = `
+var choosingStarterWhenInWrongModeTemplateText = `
 You cannot choose a starter more than once!
 `
-var choosingStarterWhenInWrongMode *template.Template
+var choosingStarterWhenInWrongModeTemplate *template.Template
 
-var usingMoveWhenInWrongModeText = `
+var usingMoveWhenInWrongModeTemplateText = `
 You cannot choose a move right now!
 `
-var usingMoveWhenInWrongMode *template.Template
+var usingMoveWhenInWrongModeTemplate *template.Template
 
-var wildEncounterWhenInWrongModeText = `
+var wildEncounterWhenInWrongModeTemplateText = `
 You cannot engage in a wild encounter right now!
 `
-var wildEncounterWhenInWrongMode *template.Template
+var wildEncounterWhenInWrongModeTemplate *template.Template
 
-var catchWhenInWrongModeText = `
+var catchWhenInWrongModeTemplateText = `
 You cannot catch a Pokémon right now!
 `
-var catchWhenInWrongMode *template.Template
+var catchWhenInWrongModeTemplate *template.Template
+
+var noChallengingSelfTemplateText = `
+You cannot battle yourself!
+`
+var noChallengingSelfTemplate *template.Template
 
 // toBaseOne converts the given number from base-zero to base-one by adding one
 // to it. This is intended to be used in templates.
@@ -445,10 +450,11 @@ func init() {
 	pokemonCaughtTemplate = template.Must(template.New("").Funcs(funcMap).Parse(pokemonCaughtTemplateText))
 	pokemonNotCaughtTemplate = template.Must(template.New("").Funcs(funcMap).Parse(pokemonNotCaughtTemplateText))
 	invalidMoveSlotTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidMoveSlotTemplateText))
-	challengingWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(challengingWhenInWrongModeText))
-	forfeittingWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(forfeittingWhenInWrongModeText))
-	choosingStarterWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(choosingStarterWhenInWrongModeText))
-	usingMoveWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(usingMoveWhenInWrongModeText))
-	wildEncounterWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(wildEncounterWhenInWrongModeText))
-	catchWhenInWrongMode = template.Must(template.New("").Funcs(funcMap).Parse(catchWhenInWrongModeText))
+	challengingWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(challengingWhenInWrongModeTemplateText))
+	forfeittingWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(forfeittingWhenInWrongModeTemplateText))
+	choosingStarterWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(choosingStarterWhenInWrongModeTemplateText))
+	usingMoveWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(usingMoveWhenInWrongModeTemplateText))
+	wildEncounterWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(wildEncounterWhenInWrongModeTemplateText))
+	catchWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(catchWhenInWrongModeTemplateText))
+	noChallengingSelfTemplate = template.Must(template.New("").Funcs(funcMap).Parse(noChallengingSelfTemplateText))
 }

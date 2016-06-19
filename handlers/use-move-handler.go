@@ -28,7 +28,7 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 	// Assert that the trainer is in battle mode
 	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     usingMoveWhenInWrongMode,
+			Templ:     usingMoveWhenInWrongModeTemplate,
 			TemplInfo: nil})
 		if err != nil {
 			return handlerError{user: "failed to populate using move when in wrong mode template", err: err}

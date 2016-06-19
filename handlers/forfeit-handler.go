@@ -24,7 +24,7 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 	// waiting mode
 	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     challengingWhenInWrongMode,
+			Templ:     challengingWhenInWrongModeTemplate,
 			TemplInfo: nil})
 		if err != nil {
 			return handlerError{user: "could not send challenging when in wrong mode template", err: err}

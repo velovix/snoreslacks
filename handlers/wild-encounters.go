@@ -25,7 +25,7 @@ func (h *WildEncounter) runTask(ctx context.Context, s Services) error {
 	// Assert that the trainer is currently in waiting mode
 	if requester.trainer.GetTrainer().Mode != pkmn.WaitingTrainerMode {
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     wildEncounterWhenInWrongMode,
+			Templ:     wildEncounterWhenInWrongModeTemplate,
 			TemplInfo: nil})
 		if err != nil {
 			return handlerError{user: "could not populate wild encounter when in wrong mode template", err: err}
@@ -149,7 +149,7 @@ func (h *CatchPokemon) runTask(ctx context.Context, s Services) error {
 	// Assert that the trainer is in battle mode
 	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     catchWhenInWrongMode,
+			Templ:     catchWhenInWrongModeTemplate,
 			TemplInfo: nil})
 		if err != nil {
 			return handlerError{user: "could not populate catch when in wrong mode template", err: err}

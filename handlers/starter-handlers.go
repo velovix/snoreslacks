@@ -120,7 +120,7 @@ func (h *ChoosingStarter) runTask(ctx context.Context, s Services) error {
 	// Assert that the trainer does not have any Pokemon yet
 	if len(requester.pkmn) != 0 {
 		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     choosingStarterWhenInWrongMode,
+			Templ:     choosingStarterWhenInWrongModeTemplate,
 			TemplInfo: nil})
 		if err != nil {
 			return handlerError{user: "could not sned choosing starter when in wrong mode template", err: err}
