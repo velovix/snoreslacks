@@ -322,7 +322,7 @@ The move had no effect...
 {{ .TargetActionPrefix }} {{ .TargetPokemonName }} has been burned!
 {{ else -}}
 {{- end -}}
-{{ printf "\u0060" }}{{ printf "%-15s" .TargetPokemonName }}: {{ .UserHPBar }}{{ printf "\u0060" }}
+{{ printf "\u0060" }}{{ printf "%-15s" .TargetPokemonName }}: {{ .TargetHPBar }}{{ printf "\u0060" }}
 `
 var moveReportTemplate *template.Template
 
