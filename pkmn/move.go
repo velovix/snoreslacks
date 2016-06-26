@@ -209,10 +209,16 @@ func calcDamage(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move
 func RunMove(user, target *Pokemon, userBI, targetBI *PokemonBattleInfo, move Move) (MoveReport, error) {
 	var mr MoveReport
 
-	if rand.Intn(100)+1 > move.Accuracy*(CalcIBAccuracy(*user, *userBI)/CalcIBEvasion(*target, *targetBI)) {
-		// The move missed, so we have nothing to do
-		mr.Missed = true
-		return mr, nil
+	// Moves with zero accuracy always hit, so no further calculation is needed
+	// in that case.
+	if move.Accuracy != 0 {
+		if rand.Intn(100)+1 > move.Accuracy*(CalcIBAccuracy(*user, *userBI)/CalcIBEvasion(*target, *targetBI)) {
+			// The move missed, so we have nothing to do
+			mr.Missed = true
+			// We don't care about effectiveness since the move missed
+			mr.Effectiveness = 1.0
+			return mr, nil
+		}
 	}
 
 	// Check if the move targets the user

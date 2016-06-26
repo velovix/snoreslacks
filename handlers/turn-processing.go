@@ -108,17 +108,23 @@ func (tp *turnProcessor) runMove(ctx context.Context, public bool, user, target 
 		return false, handlerError{user: "could not run move", err: err}
 	}
 
+	// The caller always assumes that the target is the opponent, but sometimes
+	// it's the same as the user. Correct it if that's the case.
+	if move.Target == pkmn.SelfMoveTarget {
+		target = user
+	}
+
 	// Each action in the template prefaces itself with the name of the Pokemon
 	// in question. For instance, "the wild bulbsaur used tackle" or
 	// "ash.ketchum's pikachu is poisoned!". We need to figuire out which of
 	// these prefixes is appopriate for each Pokemon
 	userActionPrefix := user.trainer.GetTrainer().Name + "'s"
 	if user.trainer.GetTrainer().Type == pkmn.WildTrainerType {
-		userActionPrefix = "The wild "
+		userActionPrefix = "The wild"
 	}
 	targetActionPrefix := target.trainer.GetTrainer().Name + "'s"
 	if target.trainer.GetTrainer().Type == pkmn.WildTrainerType {
-		targetActionPrefix = "The wild "
+		targetActionPrefix = "The wild"
 	}
 
 	// Send the move report
@@ -126,7 +132,7 @@ func (tp *turnProcessor) runMove(ctx context.Context, public bool, user, target 
 		pkmn.MoveReport
 		UserActionPrefix   string
 		UserPokemonName    string
-		UserHPBar          string
+		TargetHPBar        string
 		TargetActionPrefix string
 		TargetPokemonName  string
 		MoveName           string
@@ -134,7 +140,7 @@ func (tp *turnProcessor) runMove(ctx context.Context, public bool, user, target 
 		MoveReport:         mr,
 		UserActionPrefix:   userActionPrefix,
 		UserPokemonName:    user.activePkmn().GetPokemon().Name,
-		UserHPBar:          makeTextHPBar(target.activePkmn().GetPokemon(), target.activePkmnBattleInfo().GetPokemonBattleInfo()),
+		TargetHPBar:        makeTextHPBar(target.activePkmn().GetPokemon(), target.activePkmnBattleInfo().GetPokemonBattleInfo()),
 		TargetActionPrefix: targetActionPrefix,
 		TargetPokemonName:  target.activePkmn().GetPokemon().Name,
 		MoveName:           move.Name}
