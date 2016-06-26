@@ -186,6 +186,12 @@ func (tp *turnProcessor) runSwitch(ctx context.Context, public bool, user *battl
 		return handlerError{user: "could not populate switch Pokemon template", err: err}
 	}
 
+	// Send the new action options to the requester
+	err = makeActionOptions(ctx, tp.Services, user.basicTrainerData, user.battleInfo)
+	if err != nil {
+		return handlerError{user: "could not send action options", err: err}
+	}
+
 	return nil
 }
 

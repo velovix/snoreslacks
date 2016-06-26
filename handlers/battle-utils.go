@@ -27,7 +27,7 @@ func makeTextHPBar(p *pkmn.Pokemon, pBI *pkmn.PokemonBattleInfo) string {
 
 // makeActionOptions makes and sends each player their move and party switching
 // options.
-func makeActionOptions(ctx context.Context, s Services, trainerData *basicTrainerData, trainerDataBI database.TrainerBattleInfo, b database.Battle) error {
+func makeActionOptions(ctx context.Context, s Services, trainerData *basicTrainerData, trainerDataBI database.TrainerBattleInfo) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
 

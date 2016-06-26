@@ -92,6 +92,8 @@ func (r Runner) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	err = nil
+
 	// Do any required preprocessing if the task is a preprocessor
 	shouldRunTask := true
 	if proc, ok := r.Task.(Preprocessor); ok {
