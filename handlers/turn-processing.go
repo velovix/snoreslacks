@@ -65,9 +65,6 @@ type turnProcessor struct {
 // checkIfPlayerLost returns true if the given trainer has no more Pokemon that
 // are able to fight.
 func (tp *turnProcessor) checkIfPlayerLost(ctx context.Context, bd *battleData, checkee, opponent *battleTrainerData) (bool, error) {
-	// Load request-specific objects
-	client := ctx.Value("client").(messaging.Client)
-
 	for _, memberBI := range checkee.pkmnBattleInfo {
 		// Check if the Pokemon is still able to fight
 		if memberBI.GetPokemonBattleInfo().CurrHP > 0 {
@@ -77,29 +74,16 @@ func (tp *turnProcessor) checkIfPlayerLost(ctx context.Context, bd *battleData, 
 		}
 	}
 
-	// The trainer has lost. Let the world know.
-	templInfo := struct {
-		LostTrainer string
-		WonTrainer  string
-	}{
-		LostTrainer: checkee.trainer.GetTrainer().Name,
-		WonTrainer:  opponent.trainer.GetTrainer().Name}
-	err := messaging.SendTempl(client, checkee.lastContactURL, messaging.TemplMessage{
-		Templ:     trainerLostTemplate,
-		TemplInfo: templInfo})
-	if err != nil {
-		return false, err
-	}
-
 	return true, nil
 }
 
-// Runs a move action for a single player.
+// Runs a move action for a single player. Public is true if the messages
+// resulting from these actions should be public.
 //
 // The first return value is true if the trainer running a turn after this one
 // (if this is not the last turn) should continue their turn, and false
 // otherwise. This might be false if this move made the other Pokemon faint.
-func (tp *turnProcessor) runMove(ctx context.Context, user, target *battleTrainerData, move pkmn.Move) (bool, error) {
+func (tp *turnProcessor) runMove(ctx context.Context, public bool, user, target *battleTrainerData, move pkmn.Move) (bool, error) {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
 
@@ -157,7 +141,7 @@ func (tp *turnProcessor) runMove(ctx context.Context, user, target *battleTraine
 	err = messaging.SendTempl(client, user.lastContactURL, messaging.TemplMessage{
 		Templ:     moveReportTemplate,
 		TemplInfo: templInfo,
-		Public:    true})
+		Public:    public})
 	if err != nil {
 		return false, handlerError{user: "could not populate move report template", err: err}
 	}
@@ -172,7 +156,7 @@ func (tp *turnProcessor) runMove(ctx context.Context, user, target *battleTraine
 }
 
 // Runs a switch action for a single player.
-func (tp *turnProcessor) runSwitch(ctx context.Context, user *battleTrainerData) error {
+func (tp *turnProcessor) runSwitch(ctx context.Context, public bool, user *battleTrainerData) error {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
 
@@ -195,6 +179,7 @@ func (tp *turnProcessor) runSwitch(ctx context.Context, user *battleTrainerData)
 		SelectedPokemon:  user.pkmn[newPkmn].GetPokemon().Name,
 		SelectedLevel:    user.pkmn[newPkmn].GetPokemon().Level}
 	err = messaging.SendTempl(client, user.lastContactURL, messaging.TemplMessage{
+		Public:    public,
 		Templ:     switchPokemonTemplate,
 		TemplInfo: templInfo})
 	if err != nil {
@@ -205,7 +190,7 @@ func (tp *turnProcessor) runSwitch(ctx context.Context, user *battleTrainerData)
 }
 
 // Runs a catch action for a single player
-func (tp *turnProcessor) runCatch(ctx context.Context, user, target *battleTrainerData) (bool, error) {
+func (tp *turnProcessor) runCatch(ctx context.Context, public bool, user, target *battleTrainerData) (bool, error) {
 	// Load request-specific objects
 	client := ctx.Value("client").(messaging.Client)
 
@@ -240,6 +225,7 @@ func (tp *turnProcessor) runCatch(ctx context.Context, user, target *battleTrain
 
 	// Send the message containing the results
 	err := messaging.SendTempl(client, user.lastContactURL, messaging.TemplMessage{
+		Public:    public,
 		Templ:     templ,
 		TemplInfo: target.activePkmn().GetPokemon().Name})
 	if err != nil {
@@ -255,14 +241,14 @@ func (tp *turnProcessor) runCatch(ctx context.Context, user, target *battleTrain
 //
 // The given move object is only used as appropriate, so it's acceptable to
 // pass an empty move object if that trainer is not using a move.
-func (tp *turnProcessor) runTurn(ctx context.Context, user, target *battleTrainerData, move pkmn.Move) (bool, error) {
+func (tp *turnProcessor) runTurn(ctx context.Context, public bool, user, target *battleTrainerData, move pkmn.Move) (bool, error) {
 	switch user.battleInfo.GetTrainerBattleInfo().NextBattleAction.Type {
 	case pkmn.MoveBattleActionType:
-		return tp.runMove(ctx, user, target, move)
+		return tp.runMove(ctx, public, user, target, move)
 	case pkmn.SwitchBattleActionType:
-		return true, tp.runSwitch(ctx, user)
+		return true, tp.runSwitch(ctx, public, user)
 	case pkmn.CatchBattleActionType:
-		return tp.runCatch(ctx, user, target)
+		return tp.runCatch(ctx, public, user, target)
 	default:
 		panic("unsupported battle action type")
 	}
@@ -359,29 +345,37 @@ func (tp *turnProcessor) process(ctx context.Context, bd *battleData) (bool, err
 		}
 	}
 
+	// Decides whether messages should be seen publicly or not. Messages should
+	// only be seen publicly if two human trainers are involved. If the
+	// requester is a bot, then nobody is concerned about what's going on in
+	// that battle except the requester.
+	public := true
+
 	if opponent.trainer.GetTrainer().Type != pkmn.HumanTrainerType {
 		// Opponent is a bot of some kind, so all messages should go to the
 		// current trainer. We will reroute opponent messages to their URL.
 		opponent.lastContactURL = curr.lastContactURL
+		// Only the requester should be seeing these messages.
+		public = false
 	}
 
 	// Run the trainers' turns in an order depending on who goes first.
 	currGoesFirst := tp.doesCurrTrainerGoFirst(ctx, bd, currPkmnMove, opponentPkmnMove)
 	if currGoesFirst {
-		runNextAction, err := tp.runTurn(ctx, curr, opponent, currPkmnMove)
+		runNextAction, err := tp.runTurn(ctx, public, curr, opponent, currPkmnMove)
 		if err != nil {
 			return false, err
 		}
 		if runNextAction {
-			_, err = tp.runTurn(ctx, opponent, curr, opponentPkmnMove)
+			_, err = tp.runTurn(ctx, public, opponent, curr, opponentPkmnMove)
 		}
 	} else {
-		runNextAction, err := tp.runTurn(ctx, opponent, curr, opponentPkmnMove)
+		runNextAction, err := tp.runTurn(ctx, public, opponent, curr, opponentPkmnMove)
 		if err != nil {
 			return false, err
 		}
 		if runNextAction {
-			_, err = tp.runTurn(ctx, curr, opponent, currPkmnMove)
+			_, err = tp.runTurn(ctx, public, curr, opponent, currPkmnMove)
 			if err != nil {
 				return false, err
 			}
@@ -427,7 +421,7 @@ func (tp *turnProcessor) process(ctx context.Context, bd *battleData) (bool, err
 			Type:      messaging.Good,
 			Templ:     trainerLostTemplate,
 			TemplInfo: trainerLostTemplInfo,
-			Public:    true})
+			Public:    public})
 		if err != nil {
 			return false, err
 		}

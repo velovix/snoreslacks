@@ -106,7 +106,7 @@ func (h *SwitchPokemon) runTask(ctx context.Context, s Services) error {
 	err = messaging.SendTempl(client, battleData.requester.lastContactURL, messaging.TemplMessage{
 		Templ:     switchConfirmationTemplate,
 		TemplInfo: requester.pkmn[partySlotID-1].GetPokemon().Name,
-		Public:    true})
+		Public:    false})
 	if err != nil {
 		return handlerError{user: "could not populate switch confirmation template", err: err}
 	}
