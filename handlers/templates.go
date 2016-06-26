@@ -394,6 +394,11 @@ You cannot choose a move right now!
 `
 var usingMoveWhenInWrongModeTemplate *template.Template
 
+var switchingWhenInWrongModeTemplateText = `
+You cannot switch Pokémon right now!
+`
+var switchingWhenInWrongModeTemplate *template.Template
+
 var wildEncounterWhenInWrongModeTemplateText = `
 You cannot engage in a wild encounter right now!
 `
@@ -408,6 +413,21 @@ var noChallengingSelfTemplateText = `
 You cannot battle yourself!
 `
 var noChallengingSelfTemplate *template.Template
+
+var invalidPartySlotTemplateText = `
+You don't have a Pokémon in slot {{ . }}!
+`
+var invalidPartySlotTemplate *template.Template
+
+var switchToFaintedPokemonTemplateText = `
+There is no will to fight!
+`
+var switchToFaintedPokemonTemplate *template.Template
+
+var switchToCurrentPokemonTemplateText = `
+The Pokémon is already in battle!
+`
+var switchToCurrentPokemonTemplate *template.Template
 
 // toBaseOne converts the given number from base-zero to base-one by adding one
 // to it. This is intended to be used in templates.
@@ -457,4 +477,8 @@ func init() {
 	wildEncounterWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(wildEncounterWhenInWrongModeTemplateText))
 	catchWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(catchWhenInWrongModeTemplateText))
 	noChallengingSelfTemplate = template.Must(template.New("").Funcs(funcMap).Parse(noChallengingSelfTemplateText))
+	switchingWhenInWrongModeTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchingWhenInWrongModeTemplateText))
+	invalidPartySlotTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidPartySlotTemplateText))
+	switchToFaintedPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchToFaintedPokemonTemplateText))
+	switchToCurrentPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchToCurrentPokemonTemplateText))
 }

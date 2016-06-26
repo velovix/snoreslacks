@@ -1,6 +1,13 @@
 package handlers
 
-import "golang.org/x/net/context"
+import (
+	"errors"
+	"strconv"
+
+	"github.com/velovix/snoreslacks/messaging"
+	"github.com/velovix/snoreslacks/pkmn"
+	"golang.org/x/net/context"
+)
 
 // SwitchPokemon handles requests to switch Pokemon. This function will queue
 // up a switch to be run once both trainers finish selecting the action they
@@ -11,100 +18,137 @@ type SwitchPokemon struct {
 
 func (h *SwitchPokemon) runTask(ctx context.Context, s Services) error {
 	// Load request-specific objects
-	/*slackReq := ctx.Value("slack request").(messaging.SlackRequest)
+	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
 	client := ctx.Value("client").(messaging.Client)
-	requester := ctx.Value("requesting trainer").(basicTrainerData)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+	battleData := ctx.Value("battle data").(*battleData)
 
-	// Load the battle data
-	battleData, err := loadBattleData(ctx, s.DB, requester)
+	// Assert that the trainer is in battle mode
+	if requester.trainer.GetTrainer().Mode != pkmn.BattlingTrainerMode {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     switchingWhenInWrongModeTemplate,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "failed to populate switching when in wrong mode template", err: err}
+		}
+		return nil // No more work to do
+	}
+
+	// Assert that all necessary data is in the battle data object
+	if !battleData.isComplete() {
+		return handlerError{user: "could not load battle data", err: errors.New("incomplete battle data object")}
+	}
+
+	// Check if the command looks correct
+	if len(slackReq.CommandParams) != 1 {
+		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     invalidCommandTemplate,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "failed to populate invalid command template", err: err}
+		}
+		return nil // No more work to do
+	}
+
+	// Extract the party slot ID from the command
+	partySlotID, err := strconv.Atoi(slackReq.CommandParams[0])
 	if err != nil {
-		return handlerError{user: "could not load battle data", err: err}
+		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     invalidCommandTemplate,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not populate invalid command template", err: err}
+		}
+		return nil // There is nothing else to process
+	}
+
+	// Check if the party slot ID is valid
+	if partySlotID < 1 || partySlotID > len(battleData.requester.pkmn) {
+		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     invalidPartySlotTemplate,
+			TemplInfo: partySlotID})
+		if err != nil {
+			return handlerError{user: "could not populate invalid party slot template", err: err}
+		}
+		return nil // There is nothing else to do
+	}
+
+	// Check that the Pokemon to be switched to is a different Pokemon from the
+	// one currently out
+	if partySlotID-1 == battleData.requester.battleInfo.GetTrainerBattleInfo().CurrPkmnSlot {
+		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     switchToCurrentPokemonTemplate,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not populate switch to current Pokemon template", err: err}
+		}
+		return nil // There is nothing else to do
+	}
+
+	// Check that the Pokemon to be switched to can fight
+	if battleData.requester.pkmnBattleInfo[partySlotID-1].GetPokemonBattleInfo().CurrHP <= 0 {
+		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+			Templ:     switchToFaintedPokemonTemplate,
+			TemplInfo: nil})
+		if err != nil {
+			return handlerError{user: "could not populate switch to fainted Pokemon template", err: err}
+		}
+		return nil // There is nothing else to do
 	}
 
 	// Set up the next battle action to be a switch Pokemon action
-	battleData.curr.battleInfo.GetTrainerBattleInfo().FinishedTurn = true
-	battleData.curr.battleInfo.GetTrainerBattleInfo().NextBattleAction = pkmn.BattleAction{
+	battleData.requester.battleInfo.GetTrainerBattleInfo().FinishedTurn = true
+	battleData.requester.battleInfo.GetTrainerBattleInfo().NextBattleAction = pkmn.BattleAction{
 		Type: pkmn.SwitchBattleActionType,
-		Val:  5}
+		Val:  partySlotID - 1}
 
 	// Send confirmation that the switch was received
-	err = messaging.SendTempl(client, battleData.curr.trainer.lastContactURL, messaging.TemplMessage{
+	err = messaging.SendTempl(client, battleData.requester.lastContactURL, messaging.TemplMessage{
 		Templ:     switchConfirmationTemplate,
-		TemplInfo: "some crap",
+		TemplInfo: requester.pkmn[partySlotID-1].GetPokemon().Name,
 		Public:    true})
 	if err != nil {
 		return handlerError{user: "could not populate switch confirmation template", err: err}
 	}
 
-	// Check if both trainers have chosen their move and run the turns if so
-	var p1PkmnBI, p2PkmnBI database.PokemonBattleInfo
-	var success, battleOver bool
-	if trainerBattleInfo.GetTrainerBattleInfo().FinishedTurn &&
-		opponentBattleInfo.GetTrainerBattleInfo().FinishedTurn {
+	// Get a turn processor ready to do any required processing
+	tp := turnProcessor{Services: s}
 
-		if requester.trainer.GetTrainer().UUID == b.GetBattle().P1 {
-			// If the current trainer is player one
-			p1PkmnBI, p2PkmnBI, battleOver, success = tp.process(ctx, client, req, requester, opponent, trainerBattleInfo, opponentBattleInfo, b)
-			if !success {
-				return // Abort operation
-			}
-		} else {
-			// If the current trainer is player two
-			p1PkmnBI, p2PkmnBI, battleOver, success = tp.process(ctx, client, req, opponent, requester, opponentBattleInfo, trainerBattleInfo, b)
-			if !success {
-				return // Abort operation
-			}
-		}
+	var battleOver bool
+	// Do any work required to get the opponent ready for the turn to be
+	// processed
+	ready, err := preprocessTurn(ctx, s, battleData)
+	if err != nil {
+		return handlerError{user: "could not do preprocessing on the current turn", err: err}
 	}
-
-	if battleOver {
-		// Get the trainers out of the battle if it is over
-		requester.trainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
-		opponent.trainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
+	if ready {
+		// The opponent is ready and the turn may be processed
+		battleOver, err = tp.process(ctx, battleData)
+		if err != nil {
+			return handlerError{user: "could not process the current turn", err: err}
+		}
 	}
 
 	// Save data if all has gone well
-	err = s.DB.SaveTrainer(ctx, requester.trainer)
+	err = saveBattleData(ctx, s.DB, battleData)
 	if err != nil {
-		s.Log.Errorf(ctx, "%s", err)
-		return
+		return handlerError{user: "could not save battle session", err: err}
 	}
-	err = s.DB.SaveTrainer(ctx, opponent.Trainer)
-	if err != nil {
-		s.Log.Errorf(ctx, "%s", err)
-		return
-	}
-	err = s.DB.SaveBattle(ctx, b)
-	if err != nil {
-		s.Log.Errorf(ctx, "%s", err)
-		return
-	}
-	err = s.DB.SaveTrainerBattleInfo(ctx, b, trainerBattleInfo)
-	if err != nil {
-		s.Log.Errorf(ctx, "%s", err)
-		return
-	}
-	if p1PkmnBI != nil {
-		err = s.DB.SavePokemonBattleInfo(ctx, b, p1PkmnBI)
+	if battleOver && battleData.opponent.trainer.GetTrainer().Type == pkmn.WildTrainerType {
+		// The battle is over and the trainer is one-time-use. It's time to
+		// destroy him.
+		err = s.DB.PurgeTrainer(ctx, battleData.opponent.trainer.GetTrainer().UUID)
 		if err != nil {
-			s.Log.Errorf(ctx, "%s", err)
-			return
-		}
-	}
-	if p2PkmnBI != nil {
-		err = s.DB.SavePokemonBattleInfo(ctx, b, p2PkmnBI)
-		if err != nil {
-			s.Log.Errorf(ctx, "%s", err)
-			return
+			return handlerError{user: "could not purge the wild trainer", err: err}
 		}
 	}
 	if battleOver {
-		err = s.DB.PurgeBattle(ctx, b.GetBattle().P1, b.GetBattle().P2)
+		// Delete the battle if it has ended
+		err = s.DB.PurgeBattle(ctx, battleData.battle.GetBattle().P1, battleData.battle.GetBattle().P2)
 		if err != nil {
-			s.Log.Errorf(ctx, "%s", err)
-			return
+			return handlerError{user: "could not delete a battle", err: err}
 		}
-	}*/
+	}
 
 	return nil
 }

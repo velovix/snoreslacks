@@ -188,10 +188,12 @@ func (tp *turnProcessor) runSwitch(ctx context.Context, user *battleTrainerData)
 		Switcher         string
 		WithdrawnPokemon string
 		SelectedPokemon  string
+		SelectedLevel    int
 	}{
 		Switcher:         user.trainer.GetTrainer().Name,
 		WithdrawnPokemon: user.pkmn[prevPkmn].GetPokemon().Name,
-		SelectedPokemon:  user.pkmn[newPkmn].GetPokemon().Name}
+		SelectedPokemon:  user.pkmn[newPkmn].GetPokemon().Name,
+		SelectedLevel:    user.pkmn[newPkmn].GetPokemon().Level}
 	err = messaging.SendTempl(client, user.lastContactURL, messaging.TemplMessage{
 		Templ:     switchPokemonTemplate,
 		TemplInfo: templInfo})
