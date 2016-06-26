@@ -65,7 +65,7 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 	}
 
 	// Check if the given slot ID is valid
-	if moveSlotID > battleData.requester.activePkmn().GetPokemon().MoveCount() {
+	if moveSlotID < 1 || moveSlotID > battleData.requester.activePkmn().GetPokemon().MoveCount() {
 		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
 			Templ:     invalidMoveSlotTemplate,
 			TemplInfo: moveSlotID})
