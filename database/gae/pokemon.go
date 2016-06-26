@@ -36,7 +36,7 @@ func (db GAEDatabase) SavePokemon(ctx context.Context, dbt database.Trainer, dbp
 		panic("The given Pokemon is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	trainerKey := datastore.NewKey(ctx, trainerKindName, t.Name, 0, nil)
+	trainerKey := datastore.NewKey(ctx, trainerKindName, t.UUID, 0, nil)
 	pkmnKey := datastore.NewKey(ctx, pokemonKindName, pkmn.UUID, 0, trainerKey)
 
 	_, err := datastore.Put(ctx, pkmnKey, pkmn)
@@ -116,7 +116,7 @@ func (db GAEDatabase) LoadParty(ctx context.Context, dbt database.Trainer) ([]da
 		panic("The given trainer is not of the right type for this implementation. Are you using two implementations by mistake?")
 	}
 
-	trainerKey := datastore.NewKey(ctx, trainerKindName, t.Name, 0, nil)
+	trainerKey := datastore.NewKey(ctx, trainerKindName, t.UUID, 0, nil)
 
 	var gaeParty []*GAEPokemon
 	_, err := datastore.NewQuery(pokemonKindName).

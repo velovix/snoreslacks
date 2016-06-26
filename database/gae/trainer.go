@@ -77,15 +77,15 @@ func (db GAEDatabase) PurgeTrainer(ctx context.Context, uuid string) error {
 	// Find and delete all the trainer's Pokemon
 	query := datastore.NewQuery(pokemonKindName).
 		Ancestor(trainerKey)
-	for t := query.Run(ctx); ; {
-		var pkmn database.Pokemon
-		key, err := t.Next(&pkmn)
+	for i := query.Run(ctx); ; {
+		var pkmn GAEPokemon
+		key, err := i.Next(&pkmn)
 		if err == datastore.Done {
 			// All the trainer's Pokemon have been deleted
 			break
 		}
 		if err != nil {
-			return errors.Wrap(err, "deleting party")
+			return errors.Wrapf(err, "deleting party of trainer %v", uuid)
 		}
 		datastore.Delete(ctx, key)
 	}
@@ -93,7 +93,7 @@ func (db GAEDatabase) PurgeTrainer(ctx context.Context, uuid string) error {
 	// Delete the trainer
 	err := datastore.Delete(ctx, trainerKey)
 	if err != nil {
-		return errors.Wrap(err, "deleting trainer")
+		return errors.Wrapf(err, "deleting trainer %v", uuid)
 	}
 
 	return nil

@@ -129,6 +129,7 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 	if battleOver && battleData.opponent.trainer.GetTrainer().Type == pkmn.WildTrainerType {
 		// The battle is over and the trainer is one-time-use. It's time to
 		// destroy him.
+		s.Log.Infof(ctx, "deleting temporary trainer %v because the battle is over", battleData.opponent.trainer.GetTrainer().UUID)
 		err = s.DB.PurgeTrainer(ctx, battleData.opponent.trainer.GetTrainer().UUID)
 		if err != nil {
 			return handlerError{user: "could not purge the wild trainer", err: err}
