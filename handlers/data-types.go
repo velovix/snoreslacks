@@ -17,6 +17,12 @@ type battleTrainerData struct {
 	pkmnBattleInfo []database.PokemonBattleInfo
 }
 
+// isComplete returns true if the battle trainer data includes all the data
+// it can.
+func (btd *battleTrainerData) isComplete() bool {
+	return btd != nil && btd.basicTrainerData != nil && btd.battleInfo != nil && btd.pkmnBattleInfo != nil
+}
+
 // activePkmn returns the current active Pokemon of the trainer.
 func (btd *battleTrainerData) activePkmn() database.Pokemon {
 	return btd.pkmn[btd.battleInfo.GetTrainerBattleInfo().CurrPkmnSlot]
@@ -34,13 +40,13 @@ type battleData struct {
 	requester, opponent *battleTrainerData
 }
 
-// HasBattle returns true if the battle data includes at least a battle.
-func (bd battleData) hasBattle() bool {
-	return bd.battle != nil
+// hasBattle returns true if the battle data includes at least a battle.
+func (bd *battleData) hasBattle() bool {
+	return bd != nil && bd.battle != nil
 }
 
-// IsComplete returns true if the battle data includes all the data it
+// isComplete returns true if the battle data includes all the data it
 // can.
-func (bd battleData) isComplete() bool {
-	return bd.battle != nil && bd.requester != nil && bd.opponent != nil
+func (bd *battleData) isComplete() bool {
+	return bd != nil && bd.battle != nil && bd.requester.isComplete() && bd.opponent.isComplete()
 }

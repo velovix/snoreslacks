@@ -97,7 +97,7 @@ func (h *WildEncounter) runTask(ctx context.Context, s Services) error {
 	}
 
 	// Send the trainer their action options
-	err = makeActionOptions(ctx, s, requester, trainerBattleInfo, b)
+	err = makeActionOptions(ctx, s, requester, trainerBattleInfo)
 	if err != nil {
 		return handlerError{user: "could not send action options", err: err}
 	}

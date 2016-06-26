@@ -206,12 +206,12 @@ func (h *Challenge) runTask(ctx context.Context, s Services) error {
 		}
 
 		// Make action options for the current trainer
-		err = makeActionOptions(ctx, s, requester, requesterBI, b)
+		err = makeActionOptions(ctx, s, requester, requesterBI)
 		if err != nil {
 			return handlerError{user: "could not send action options", err: err}
 		}
 		// Make action options for the opponent
-		err = makeActionOptions(ctx, s, opponent, opponentBI, b)
+		err = makeActionOptions(ctx, s, opponent, opponentBI)
 		if err != nil {
 			return handlerError{user: "could not send action options", err: err}
 		}
