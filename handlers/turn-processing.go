@@ -362,9 +362,8 @@ func (tp *turnProcessor) process(ctx context.Context, bd *battleData) (bool, err
 	// requester is a bot, then nobody is concerned about what's going on in
 	// that battle except the requester.
 	public := true
-
 	if opponent.trainer.GetTrainer().Type != pkmn.HumanTrainerType {
-		// Opponent is a bot of some kind, so all messages should go to the
+		// Opponent is a bot of some kind, so all messages shoudl go to the
 		// current trainer. We will reroute opponent messages to their URL.
 		opponent.lastContactURL = curr.lastContactURL
 		// Only the requester should be seeing these messages.
@@ -392,6 +391,23 @@ func (tp *turnProcessor) process(ctx context.Context, bd *battleData) (bool, err
 				return false, err
 			}
 		}
+	}
+
+	// Check if the opponent Pokemon fainted and award the requester's Pokemon
+	// experience if so
+	if opponent.activePkmnBattleInfo().GetPokemonBattleInfo().CurrHP <= 0 {
+		wild := opponent.trainer.GetTrainer().Type == pkmn.WildTrainerType
+		exp := pkmn.Experience(*opponent.activePkmn().GetPokemon(), wild)
+		curr.activePkmn().GetPokemon().Experience += exp
+		tp.Log.Infof(ctx, "awarding %v %v experience points", curr.activePkmn().GetPokemon().Name, exp)
+	}
+	// Check if the requester Pokemon fainted and award the opponent's Pokemon
+	// experience if so
+	if curr.activePkmnBattleInfo().GetPokemonBattleInfo().CurrHP <= 0 {
+		// We can always assume the requester is not a wild Pokemon trainer
+		exp := pkmn.Experience(*curr.activePkmn().GetPokemon(), false)
+		opponent.activePkmn().GetPokemon().Experience += exp
+		tp.Log.Infof(ctx, "awarding %v %v experience points", opponent.activePkmn().GetPokemon().Name, exp)
 	}
 
 	// Check if the requester has lost
@@ -434,6 +450,17 @@ func (tp *turnProcessor) process(ctx context.Context, bd *battleData) (bool, err
 			Templ:     trainerLostTemplate,
 			TemplInfo: trainerLostTemplInfo,
 			Public:    public})
+		if err != nil {
+			return false, err
+		}
+
+		// Check all the requester's and opponent's Pokemon to see if they
+		// should level up.
+		_, err = levelUpPartyIfPossible(ctx, tp.Services, curr.basicTrainerData)
+		if err != nil {
+			return false, err
+		}
+		_, err = levelUpPartyIfPossible(ctx, tp.Services, opponent.basicTrainerData)
 		if err != nil {
 			return false, err
 		}

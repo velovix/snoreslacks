@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 
 	"github.com/velovix/snoreslacks/messaging"
 	"github.com/velovix/snoreslacks/pkmn"

@@ -322,7 +322,9 @@ The move had no effect...
 {{ .TargetActionPrefix }} {{ .TargetPokemonName }} has been burned!
 {{ else -}}
 {{- end -}}
+{{- if not .TargetsUser }}
 {{ printf "\u0060" }}{{ printf "%-15s" .TargetPokemonName }}: {{ .TargetHPBar }}{{ printf "\u0060" }}
+{{- end -}}
 `
 var moveReportTemplate *template.Template
 
@@ -429,6 +431,16 @@ The Pokémon is already in battle!
 `
 var switchToCurrentPokemonTemplate *template.Template
 
+var levelUpTemplateText = `
+{{ .Name }} grew to level {{ .Level }}!
+`
+var levelUpTemplate *template.Template
+
+var learnedMoveTemplateText = `
+{{ .PokemonName }} learned {{ .MoveName }}!
+`
+var learnedMoveTemplate *template.Template
+
 // toBaseOne converts the given number from base-zero to base-one by adding one
 // to it. This is intended to be used in templates.
 func toBaseOne(i int) int {
@@ -481,4 +493,6 @@ func init() {
 	invalidPartySlotTemplate = template.Must(template.New("").Funcs(funcMap).Parse(invalidPartySlotTemplateText))
 	switchToFaintedPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchToFaintedPokemonTemplateText))
 	switchToCurrentPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchToCurrentPokemonTemplateText))
+	levelUpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(levelUpTemplateText))
+	learnedMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(learnedMoveTemplateText))
 }
