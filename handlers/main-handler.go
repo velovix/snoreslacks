@@ -131,6 +131,27 @@ func (h *Main) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.Log.Infof(ctx, "'%s' is looking to encounter a wild Pokemon", slackReq.Username)
 			h.WorkQueue.Add(ctx, WildEncounterURL, slackReqBlob.Bytes())
 		}
+	case pkmn.ForgetMoveTrainerMode:
+		// The trainer is currently deciding whether or not to replace an
+		// existing move with a new one
+		switch slackReq.CommandName {
+		default:
+			// The user doesn't know what to do
+
+			h.Log.Infof(ctx, "'%s' is looking for a list of commands while in forget move mode", slackReq.Username)
+			h.WorkQueue.Add(ctx, ForgetMoveHelpURL, slackReqBlob.Bytes())
+		case "NO":
+			// The user decided not to forget an existing move
+
+			h.Log.Infof(ctx, "'%s' does not want to forget any existing moves", slackReq.Username)
+			h.WorkQueue.Add(ctx, NoForgetMoveURL, slackReqBlob.Bytes())
+		case "FORGET":
+			// The user decided to forget an existing move in favor of a
+			// new one
+
+			h.Log.Infof(ctx, "'%s' wants to forget an existing move in favor of a new one", slackReq.Username)
+			h.WorkQueue.Add(ctx, ForgetMoveURL, slackReqBlob.Bytes())
+		}
 	case pkmn.BattlingTrainerMode:
 		// The trainer is battling or waiting to battle
 

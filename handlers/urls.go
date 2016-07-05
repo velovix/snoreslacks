@@ -17,4 +17,7 @@ const (
 	CatchPokemonURL      = workerPrefix + "/catch-pokemon"
 	ViewPartyURL         = workerPrefix + "/view-party"
 	WildEncounterURL     = workerPrefix + "/wild"
+	ForgetMoveHelpURL    = workerPrefix + "/forget-move-help"
+	NoForgetMoveURL      = workerPrefix + "/no-forget-move"
+	ForgetMoveURL        = workerPrefix + "/forget-move"
 )

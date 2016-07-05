@@ -15,6 +15,7 @@ const (
 	StarterTrainerMode
 	WaitingTrainerMode
 	BattlingTrainerMode
+	ForgetMoveTrainerMode
 )
 
 // TrainerType represents different classes of trainers.

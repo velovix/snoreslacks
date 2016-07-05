@@ -163,6 +163,20 @@ Leave the battle. This counts as a loss for you.
 `
 var battlingHelpTemplate *template.Template
 
+// Forget move help template. This template will be shown when the trainer is
+// looking for a list of commands while deciding whether or not to replace one
+// move with another.
+var forgetMoveHelpTemplateText = `
+You are choosing to either forget an existing move or give up learning a new one.
+
+{{ . }} _slot_
+Forget the move in the given slot in favor of the new move.
+
+{{ . }} no
+Keep all existing moves and give up learning the new one.
+`
+var forgetMoveHelpTemplate *template.Template
+
 // No such trainer exists template. This template will be shown when the
 // trainer wants to interact with another trainer that isn't registred.
 var noSuchTrainerExistsTemplateText = `
@@ -441,6 +455,21 @@ var learnedMoveTemplateText = `
 `
 var learnedMoveTemplate *template.Template
 
+var forgetMoveTemplateText = `
+{{ .PokemonName }} wants to learn {{ .MoveName }} but {{ .PokemonName }} already knows 4 moves! Should a move be forgotten to make space for {{ .MoveName }}? If so, respond with "{{ .SlashCommand }} forget" followed by the ID (1-4) of the move you'd like to forget. Otherwise, respond with "{{ .SlashCommand }} no"
+{{ printf "\u0060\u0060\u0060" -}}
+MOVES
+{{ range $id, $moveName := .MoveSlots }}  {{ toBaseOne $id }}: {{ $moveName }}
+{{ end -}}
+{{ printf "\u0060\u0060\u0060" }}
+`
+var forgetMoveTemplate *template.Template
+
+var giveUpLearningMoveTemplateText = `
+{{ .PokemonName }} gave up on learning {{ .MoveName }}.
+`
+var giveUpLearningMoveTemplate *template.Template
+
 // toBaseOne converts the given number from base-zero to base-one by adding one
 // to it. This is intended to be used in templates.
 func toBaseOne(i int) int {
@@ -495,4 +524,7 @@ func init() {
 	switchToCurrentPokemonTemplate = template.Must(template.New("").Funcs(funcMap).Parse(switchToCurrentPokemonTemplateText))
 	levelUpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(levelUpTemplateText))
 	learnedMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(learnedMoveTemplateText))
+	forgetMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(forgetMoveTemplateText))
+	forgetMoveHelpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(forgetMoveHelpTemplateText))
+	giveUpLearningMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(giveUpLearningMoveTemplateText))
 }
