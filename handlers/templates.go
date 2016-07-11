@@ -470,6 +470,11 @@ var giveUpLearningMoveTemplateText = `
 `
 var giveUpLearningMoveTemplate *template.Template
 
+var replacedMoveTemplateText = `
+{{ .PokemonName }} forgot {{ .OldMoveName }} and learned {{ .NewMoveName }}!
+`
+var replacedMoveTemplate *template.Template
+
 // toBaseOne converts the given number from base-zero to base-one by adding one
 // to it. This is intended to be used in templates.
 func toBaseOne(i int) int {
@@ -527,4 +532,5 @@ func init() {
 	forgetMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(forgetMoveTemplateText))
 	forgetMoveHelpTemplate = template.Must(template.New("").Funcs(funcMap).Parse(forgetMoveHelpTemplateText))
 	giveUpLearningMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(giveUpLearningMoveTemplateText))
+	replacedMoveTemplate = template.Must(template.New("").Funcs(funcMap).Parse(replacedMoveTemplateText))
 }

@@ -43,13 +43,7 @@ func (h *Challenge) preprocess(ctx context.Context, s Services) (context.Context
 
 	// Check if the command was used correctly
 	if len(slackReq.CommandParams) != 1 {
-		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     invalidCommandTemplate,
-			TemplInfo: nil})
-		if err != nil {
-			return ctx, false, handlerError{user: "could not send invalid command template", err: err}
-		}
-		return ctx, false, nil // No more work to do
+		return ctx, false, sendInvalidCommand(client, requester.lastContactURL)
 	}
 
 	// Trainers are identified by their UUID, not their display name, so we

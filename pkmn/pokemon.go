@@ -89,6 +89,29 @@ func (pkmn *Pokemon) MoveIDsAsSlice() []int {
 	return moves
 }
 
+func (pkmn *Pokemon) ReplaceMove(oldMoveSlot, newMoveID int) error {
+	// Check that the move to be replaced actually exists
+	if oldMoveSlot > pkmn.MoveCount() || oldMoveSlot <= 0 || pkmn.MoveIDsAsSlice()[oldMoveSlot] == 0 {
+		return errors.Errorf("attempt to replace a non-existant move at slot %v", oldMoveSlot)
+	}
+
+	// Replace the move
+	switch oldMoveSlot {
+	case 1:
+		pkmn.Move1 = newMoveID
+	case 2:
+		pkmn.Move2 = newMoveID
+	case 3:
+		pkmn.Move3 = newMoveID
+	case 4:
+		pkmn.Move4 = newMoveID
+	default:
+		panic("invalid move slot")
+	}
+
+	return nil
+}
+
 func (pkmn *Pokemon) LearnMove(moveID int) error {
 	if pkmn.Move1 == 0 {
 		pkmn.Move1 = moveID
