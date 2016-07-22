@@ -3,7 +3,7 @@ package pkmn
 type Region int
 
 const (
-	KantoRegion = iota
+	KantoRegion Region = iota
 	JohtoRegion
 	HoennRegion
 	SinnohRegion

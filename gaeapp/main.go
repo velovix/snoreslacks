@@ -103,6 +103,18 @@ func init() {
 		Servs: services,
 		Task:  &handlers.WildEncounter{}})
 
+	http.Handle(handlers.ForgetMoveHelpURL, handlers.Runner{
+		Servs: services,
+		Task:  &handlers.ForgetMoveHelp{}})
+
+	http.Handle(handlers.ForgetMoveURL, handlers.Runner{
+		Servs: services,
+		Task:  &handlers.ForgetMove{}})
+
+	http.Handle(handlers.NoForgetMoveURL, handlers.Runner{
+		Servs: services,
+		Task:  &handlers.NoForgetMove{}})
+
 	// Set up the main handler to respond to Slack requests
 	mainHandler := &handlers.Main{
 		Services: services,

@@ -44,25 +44,13 @@ func (h *UseMove) runTask(ctx context.Context, s Services) error {
 
 	// Check if the command looks correct
 	if len(slackReq.CommandParams) != 1 {
-		err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     invalidCommandTemplate,
-			TemplInfo: nil})
-		if err != nil {
-			return handlerError{user: "failed to populate invalid command template", err: err}
-		}
-		return nil // No more work to do
+		return sendInvalidCommand(client, requester.lastContactURL)
 	}
 
 	// Extract the move slot ID from the command
 	moveSlotID, err := strconv.Atoi(slackReq.CommandParams[0])
 	if err != nil {
-		err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
-			Templ:     invalidCommandTemplate,
-			TemplInfo: nil})
-		if err != nil {
-			return handlerError{user: "could not populate invalid command template", err: err}
-		}
-		return nil // There is nothing else to process
+		return sendInvalidCommand(client, requester.lastContactURL)
 	}
 
 	// Check if the given slot ID is valid

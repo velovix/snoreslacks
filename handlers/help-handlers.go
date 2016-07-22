@@ -71,3 +71,25 @@ func (h *BattlingHelp) runTask(ctx context.Context, s Services) error {
 
 	return nil
 }
+
+// ForgetMoveHelp sends help information to the user when they are deciding
+// whether or not to forget a move.
+type ForgetMoveHelp struct {
+}
+
+func (h *ForgetMoveHelp) runTask(ctx context.Context, s Services) error {
+	// Load request-specific objects
+	slackReq := ctx.Value("slack request").(messaging.SlackRequest)
+	client := ctx.Value("client").(messaging.Client)
+	requester := ctx.Value("requesting trainer").(*basicTrainerData)
+
+	// Send the templated info
+	err := messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+		Templ:     forgetMoveHelpTemplate,
+		TemplInfo: slackReq.SlashCommand})
+	if err != nil {
+		return handlerError{user: "could not populate battling help template", err: err}
+	}
+
+	return nil
+}

@@ -159,7 +159,8 @@ func NewMove(apiMove Move) (pkmn.Move, error) {
 	case "confusion":
 		m.Ailment = pkmn.ConfusionAilment
 	default:
-		return pkmn.Move{}, errors.New("unsupported ailment '" + apiMove.Meta.Ailment.Name + "'")
+		// Not all ailments are supported at this time
+		m.Ailment = pkmn.NoAilment
 	}
 	// Check if the move hits multiple times
 	m.HasMultipleHits = apiMove.Meta.MinHits != nil
