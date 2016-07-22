@@ -25,7 +25,7 @@ func (h *NoForgetMove) runTask(ctx context.Context, s Services) error {
 	for _, partyMember := range requester.pkmn {
 		// Find the first Pokemon that is waiting to level up, which is always
 		// the one we're currently talking about
-		if pk.GetPokemon().ReadyToLevelUp() {
+		if partyMember.GetPokemon().ReadyToLevelUp() {
 			pk = partyMember
 			break
 		}
@@ -108,7 +108,7 @@ func (h *ForgetMove) runTask(ctx context.Context, s Services) error {
 	for _, partyMember := range requester.pkmn {
 		// Find the first Pokemon that is waiting to level up, which is always
 		// the one we're currently talking about
-		if pk.GetPokemon().ReadyToLevelUp() {
+		if partyMember.GetPokemon().ReadyToLevelUp() {
 			pk = partyMember
 			break
 		}
@@ -135,7 +135,7 @@ func (h *ForgetMove) runTask(ctx context.Context, s Services) error {
 		return handlerError{user: "failed to load move info", err: err}
 	}
 	// Load information on the move that will be replaced
-	oldMove, err := loadMove(ctx, client, s.Fetcher, pk.GetPokemon().MoveIDsAsSlice()[replacedMoveSlotID])
+	oldMove, err := loadMove(ctx, client, s.Fetcher, pk.GetPokemon().MoveIDsAsSlice()[replacedMoveSlotID-1])
 	if err != nil {
 		return handlerError{user: "failed to load new move info", err: err}
 	}
@@ -160,6 +160,29 @@ func (h *ForgetMove) runTask(ctx context.Context, s Services) error {
 		TemplInfo: templInfo})
 	if err != nil {
 		return handlerError{user: "failed to populate replaced move template", err: err}
+	}
+
+	// Level up the Pokemon manually to show that all conflicts have been
+	// resolved
+	pk.GetPokemon().Level += 1
+	err = messaging.SendTempl(client, requester.lastContactURL, messaging.TemplMessage{
+		Templ:     levelUpTemplate,
+		TemplInfo: pk.GetPokemon()})
+	if err != nil {
+		return handlerError{user: "could not populate level up template", err: err}
+	}
+
+	// Continue the process of leveling up the party
+	problemSlot, err := levelUpPartyIfPossible(ctx, s, requester)
+	if problemSlot == -1 {
+		// The process is complete
+		requester.trainer.GetTrainer().Mode = pkmn.WaitingTrainerMode
+	}
+
+	// Save data if all went well
+	err = saveBasicTrainerData(ctx, s.DB, requester)
+	if err != nil {
+		return handlerError{user: "could not save basic trainer data", err: err}
 	}
 
 	return nil

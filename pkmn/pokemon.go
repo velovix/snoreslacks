@@ -91,7 +91,7 @@ func (pkmn *Pokemon) MoveIDsAsSlice() []int {
 
 func (pkmn *Pokemon) ReplaceMove(oldMoveSlot, newMoveID int) error {
 	// Check that the move to be replaced actually exists
-	if oldMoveSlot > pkmn.MoveCount() || oldMoveSlot <= 0 || pkmn.MoveIDsAsSlice()[oldMoveSlot] == 0 {
+	if oldMoveSlot > pkmn.MoveCount() || oldMoveSlot <= 0 || pkmn.MoveIDsAsSlice()[oldMoveSlot-1] == 0 {
 		return errors.Errorf("attempt to replace a non-existant move at slot %v", oldMoveSlot)
 	}
 
