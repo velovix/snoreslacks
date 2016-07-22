@@ -80,6 +80,15 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 		requester.trainer.GetTrainer().Losses++
 		opponent.trainer.GetTrainer().Wins++
 
+		// Check if the trainer is fighting against a bot. If so, the forfeit
+		// message should not be public
+		var public bool
+		if opponent.trainer.GetTrainer().Type == pkmn.WildTrainerType || opponent.trainer.GetTrainer().Type == pkmn.GymLeaderTrainerType {
+			public = false
+		} else if opponent.trainer.GetTrainer().Type == pkmn.HumanTrainerType {
+			public = true
+		}
+
 		// Construct a template letting everyone know that the requesting
 		// trainer forfeitted
 		battlingForfeitTemplInfo := struct {
@@ -93,7 +102,7 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 			Type:      messaging.Good,
 			Templ:     battlingForfeitTemplate,
 			TemplInfo: battlingForfeitTemplInfo,
-			Public:    true})
+			Public:    public})
 		if err != nil {
 			return handlerError{user: "could not populate battling forfeit template", err: err}
 		}
