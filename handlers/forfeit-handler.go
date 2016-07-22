@@ -120,6 +120,17 @@ func (h *Forfeit) runTask(ctx context.Context, s Services) error {
 		return handlerError{user: "could not save the requesting trainer", err: err}
 	}
 
+	// Delete the trainer if it is temporary
+	if battleData.opponent.trainer.GetTrainer().Type == pkmn.WildTrainerType {
+		// The battle is over and the trainer is one-time-use. It's time to
+		// destroy him or her.
+		s.Log.Infof(ctx, "deleting temporary trainer %v because the battle is over", battleData.opponent.trainer.GetTrainer().UUID)
+		err = s.DB.PurgeTrainer(ctx, battleData.opponent.trainer.GetTrainer().UUID)
+		if err != nil {
+			return handlerError{user: "could not purge the wild trainer", err: err}
+		}
+	}
+
 	// The battle is over, so it should be deleted
 	s.Log.Infof(ctx, "deleting a battle %s/%s", battleData.battle.GetBattle().P1, battleData.battle.GetBattle().P2)
 	err = s.DB.PurgeBattle(ctx, battleData.battle.GetBattle().P1, battleData.battle.GetBattle().P2)
