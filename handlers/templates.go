@@ -39,8 +39,8 @@ var starterMessageTemplate *template.Template
 // a valid starter.
 var starterPickedTemplateText = `
 *Professor Oak*
-So, you want {{ .PkmnName }}! This Pokémon is really energetic!
-{{ .TrainerName }} received a {{ .PkmnName }}!
+So, you want {{ .PkmnName }}! This Pokémon is really energetic! {{ .TrainerName }} received a {{ .PkmnName }}!
+Remember to use "{{ .CommandName }} help" if you ever want to know what options you have!
 
 (You can check out your party with the "{{ .CommandName }} party" command)
 `
