@@ -42,7 +42,10 @@ var starterPickedTemplateText = `
 So, you want {{ .PkmnName }}! This Pokémon is really energetic! {{ .TrainerName }} received a {{ .PkmnName }}!
 Remember to use "{{ .CommandName }} help" if you ever want to know what options you have!
 
-(You can check out your party with the "{{ .CommandName }} party" command)
+Start a battle with a wild Pokémon with "{{ .CommandName }} wild"! Try to catch it!
+Start a battle with another trainer with "{{ .CommandName }} battle" followed by the trainer's username!
+Check out your party with the "{{ .CommandName }} party" command!
+And much, much more!
 `
 var starterPickedTemplate *template.Template
 
