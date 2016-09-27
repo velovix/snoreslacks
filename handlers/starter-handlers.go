@@ -65,11 +65,16 @@ func (h *NewTrainer) runTask(ctx context.Context, s Services) error {
 
 	// Construct a new trainer
 	requester := s.DB.NewTrainer(pkmn.Trainer{
-		UUID:                slackReq.UserID, // Use Slack's user IDs as a unique identifier
-		Name:                slackReq.Username,
-		Mode:                pkmn.StarterTrainerMode, // The trainer needs to choose its starter
-		Type:                pkmn.HumanTrainerType,   // The trainer is a human being, not an NPC
-		KantoEncounterLevel: 1,                       // Grant the user access to level 1 Kanto encounters
+		UUID:                 slackReq.UserID, // Use Slack's user IDs as a unique identifier
+		Name:                 slackReq.Username,
+		Mode:                 pkmn.StarterTrainerMode, // The trainer needs to choose its starter
+		Type:                 pkmn.HumanTrainerType,   // The trainer is a human being, not an NPC
+		KantoEncounterLevel:  1,                       // Grant the user access to level 1 encounters
+		JohtoEncounterLevel:  1,
+		HoennEncounterLevel:  1,
+		SinnohEncounterLevel: 1,
+		UnovaEncounterLevel:  1,
+		KalosEncounterLevel:  1,
 	})
 
 	s.Log.Infof(ctx, "created a new trainer: %+v", *requester.GetTrainer())
